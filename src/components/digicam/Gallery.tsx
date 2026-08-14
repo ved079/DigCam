@@ -13,35 +13,21 @@ function formatCoord(val: number, pos: string, neg: string): string {
 export function Gallery() {
   const {
     captures, galleryIndex, setGalleryIndex, deleteCapture, setMode, setCaptureRotation,
-    comparisonMode, toggleComparisonMode, updateCaptureEdit, updateCaptureDataUrl, updateCaptureCrop,
-    selectedIds, toggleSelect, selectAll, clearSelection, deleteSelected,
+    updateCaptureEdit, updateCaptureDataUrl, updateCaptureCrop,
     panoramaFrames, clearPanoramaFrames, addCapture,
-    selectedForCollage, toggleCollageSelect, clearCollageSelection,
   } = useCameraStore();
   const [showInfo, setShowInfo] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [slideshowActive, setSlideshowActive] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
-  const [collageMode, setCollageMode] = useState(false);
-  const [collageType, setCollageType] = useState<'2x2' | '3x3'>('2x2');
   const current = captures[galleryIndex];
-  const selectCount = selectedIds.length;
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const [isDraggingCompare, setIsDraggingCompare] = useState(false);
-  const [comparePos, setComparePos] = useState(50);
-  const [compareWidth, setCompareWidth] = useState(300);
   const lastTapRef = useRef(0);
   // Print preview state
-  const [printMode] = useState(false);
-  const [compareTargetIndex, setCompareTargetIndex] = useState(-1);
+  const [showMore, setShowMore] = useState(false);
   // Compute edit values from current capture
   const editBrightness = current?.editBrightness ?? 0;
   const editContrast = current?.editContrast ?? 0;
   const editSaturation = current?.editSaturation ?? 0;
   const currentId = current?.id;
-
-  // Exit select mode when captures change to 0
-  if (captures.length === 0 && selectMode) setSelectMode(false);
 
   // Draw histogram in info overlay
   useEffect(() => {
@@ -127,15 +113,6 @@ export function Gallery() {
     setWatermarkText('');
   }
 
-  // Enter/exit select mode
-  const handleEnterSelect = useCallback(() => { setSelectMode(true); setEditMode(false); setCropMode(false); setShowInfo(false); }, []);
-  const handleExitSelect = useCallback(() => { setSelectMode(false); clearSelection(); }, [clearSelection]);
-  const handleSelectAll = useCallback(() => { selectAll(); }, [selectAll]);
-  const handleDeleteSelected = useCallback(() => {
-    deleteSelected();
-    if (captures.length - selectCount <= 0) setSelectMode(false);
-  }, [deleteSelected, captures.length, selectCount]);
-
   // Rotate photo
   const handleRotate = useCallback(() => {
     if (!current || current.type === 'video') return;
@@ -183,47 +160,6 @@ export function Gallery() {
     setMode('photo');
     setIsVideoPlaying(false);
   }, [setMode]);
-
-  // Comparison drag handlers
-  const handleCompareMove = useCallback((clientX: number, containerEl?: HTMLElement) => {
-    const el = containerEl || compareContainerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    let pct = ((clientX - rect.left) / rect.width) * 100;
-    pct = Math.max(10, Math.min(90, pct));
-    setComparePos(pct);
-    setCompareWidth(rect.width);
-  }, []);
-
-  const compareContainerRef = useRef<HTMLDivElement>(null);
-
-  const handleCompareMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingCompare(true);
-    if (compareContainerRef.current) handleCompareMove(e.clientX, compareContainerRef.current);
-  }, [handleCompareMove]);
-
-  const handleCompareTouchStart = useCallback((e: React.TouchEvent) => {
-    setIsDraggingCompare(true);
-    if (compareContainerRef.current) handleCompareMove(e.touches[0].clientX, compareContainerRef.current);
-  }, [handleCompareMove]);
-
-  useEffect(() => {
-    if (!isDraggingCompare) return;
-    const onMouseMove = (e: MouseEvent) => { if (compareContainerRef.current) handleCompareMove(e.clientX, compareContainerRef.current); };
-    const onTouchMove = (e: TouchEvent) => { if (compareContainerRef.current) handleCompareMove(e.touches[0].clientX, compareContainerRef.current); };
-    const onEnd = () => setIsDraggingCompare(false);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onEnd);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onEnd);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onEnd);
-    };
-  }, [isDraggingCompare, handleCompareMove]);
 
   // Burn in watermark
   const handleBurnIn = useCallback(() => {
@@ -308,60 +244,6 @@ export function Gallery() {
       clearPanoramaFrames();
     });
   }, [panoramaFrames, addCapture, clearPanoramaFrames]);
-
-  // Create collage
-  const handleCreateCollage = useCallback(() => {
-    const required = collageType === '2x2' ? 4 : 9;
-    if (selectedForCollage.length !== required) return;
-    const photos = captures.filter((c) => c.type === 'photo' && selectedForCollage.includes(c.id));
-    if (photos.length !== required) return;
-    const loadImages = photos.map((cap) => {
-      return new Promise<HTMLImageElement>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(img);
-        img.src = cap.dataUrl;
-      });
-    });
-    Promise.all(loadImages).then((images) => {
-      const validImages = images.filter((img) => img.width > 0 && img.height > 0);
-      if (validImages.length < required) return;
-      const cols = collageType === '2x2' ? 2 : 3;
-      const rows = cols;
-      const cellW = Math.min(...validImages.map((img) => img.width));
-      const cellH = Math.min(...validImages.map((img) => img.height));
-      const border = 2;
-      const canvas = document.createElement('canvas');
-      canvas.width = cols * cellW + (cols - 1) * border;
-      canvas.height = rows * cellH + (rows - 1) * border;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      for (let i = 0; i < validImages.length; i++) {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = col * (cellW + border);
-        const y = row * (cellH + border);
-        ctx.drawImage(validImages[i], 0, 0, cellW, cellH, x, y, cellW, cellH);
-      }
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      const collageCapture = {
-        id: `collage_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        type: 'photo' as const,
-        dataUrl,
-        timestamp: Date.now(),
-        sceneMode: 'AUTO' as const,
-        flashMode: 'off' as const,
-        dateStamp: new Date().toLocaleString(),
-        aspectMode: '1:1' as const,
-      };
-      addCapture(collageCapture as unknown as import('@/lib/camera-store').CaptureItem);
-      saveCapture(collageCapture as unknown as Record<string, unknown>).catch(() => {});
-      clearCollageSelection();
-      setCollageMode(false);
-    });
-  }, [selectedForCollage, captures, collageType, addCapture, clearCollageSelection]);
 
   // Apply edits to canvas
   const handleApplyEdit = useCallback(() => {
@@ -484,16 +366,6 @@ export function Gallery() {
     };
   }, [goNext, goPrev]);
 
-  // Slideshow
-  useEffect(() => {
-    if (!slideshowActive) return;
-    const timer = setInterval(() => {
-      setGalleryIndex((i) => (i < captures.length - 1 ? i + 1 : 0));
-      setIsVideoPlaying(false);
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [slideshowActive, captures.length, setGalleryIndex]);
-
   // Compute the CSS filter for the edit preview
   const editFilter = `brightness(${1 + editBrightness / 100}) contrast(${1 + editContrast / 100}) saturate(${1 + editSaturation / 100})`;
   const hasEdit = editBrightness !== 0 || editContrast !== 0 || editSaturation !== 0;
@@ -569,52 +441,6 @@ export function Gallery() {
               </div>
             </div>
           )
-        ) : comparisonMode ? (
-          /* Before/After comparison mode */
-          <div
-            className="digi-compare-container"
-            ref={compareContainerRef}
-            onMouseMove={isDraggingCompare ? (e) => { e.preventDefault(); handleCompareMove(e.clientX, compareContainerRef.current); } : undefined}
-            onMouseDown={handleCompareMouseDown}
-            onTouchStart={handleCompareTouchStart}
-            style={{ userSelect: 'none' }}
-          >
-            {/* Right side: ORIGINAL (simulated) */}
-            <div className="digi-compare-side digi-compare-original">
-              <span className="digi-compare-label">ORIGINAL</span>
-              <img
-                src={current.dataUrl}
-                alt="Original"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  filter: 'contrast(0.6) saturate(0.5) brightness(1.1)',
-                }}
-              />
-            </div>
-            {/* Left side: CCD processed (clipped) */}
-            <div className="digi-compare-side digi-compare-ccd" style={{ width: `${comparePos}%` }}>
-              <span className="digi-compare-label">CCD</span>
-              <img
-                src={current.dataUrl}
-                alt="CCD Processed"
-                style={{
-                  width: `${compareWidth}px`,
-                  maxWidth: 'none',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-              />
-            </div>
-            {/* Divider */}
-            <div
-              className="digi-compare-divider"
-              style={{ left: `${comparePos}%` }}
-            >
-              <div className="digi-compare-divider-handle" />
-            </div>
-          </div>
         ) : (
           <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <img
@@ -641,11 +467,6 @@ export function Gallery() {
           </div>
         )}
       </div>
-
-      {/* Selection counter overlay */}
-      {selectMode && selectCount > 0 && (
-        <div className="digi-select-count">{selectCount} selected</div>
-      )}
 
       {/* Navigation arrows */}
       <div className="digi-gallery-nav">
@@ -853,16 +674,11 @@ export function Gallery() {
 
       {/* Thumbnail strip */}
       <div className="digi-gallery-strip">
-        {captures.map((cap, idx) => {
-          const isSelected = selectMode && selectedIds.includes(cap.id);
-          return (
+        {captures.map((cap, idx) => (
             <button
               key={cap.id}
               className={`digi-thumb ${idx === galleryIndex ? 'thumb-active' : ''}`}
-              onClick={() => {
-                if (selectMode) { toggleSelect(cap.id); }
-                else { setGalleryIndex(idx); setIsVideoPlaying(false); }
-              }}
+              onClick={() => { setGalleryIndex(idx); setIsVideoPlaying(false); }}
             >
               {cap.type === 'video' ? (
                 <div className="digi-thumb-video">
@@ -872,190 +688,84 @@ export function Gallery() {
               ) : (
                 <img src={cap.dataUrl} alt="" />
               )}
-              {isSelected && <div className="digi-select-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg></div>}
             </button>
-          );
-        })}
+          ))}
       </div>
 
-      {/* Action buttons */}
-      <div className="digi-gallery-actions">
-        {selectMode ? (
-          <>
-            <button className="digi-gallery-action-btn select-active" onClick={handleSelectAll}>SELECT ALL</button>
-            <button className="digi-gallery-action-btn delete" onClick={handleDeleteSelected} disabled={selectCount === 0} style={{ opacity: selectCount === 0 ? 0.4 : 1 }}>DELETE ({selectCount})</button>
-            <button className="digi-gallery-action-btn" onClick={handleExitSelect}>CANCEL</button>
-          </>
-        ) : (
-          <>
-            <button className="digi-gallery-action-btn slideshow" onClick={() => { setSlideshowActive(!slideshowActive); }}>
-              <span>⏩</span><span>{slideshowActive ? 'STOP' : 'SLIDE'}</span>
-            </button>
-            {current.type === 'photo' && (
-              <button className="digi-gallery-action-btn rotate" onClick={handleRotate}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-                <span>ROTATE</span>
-              </button>
-            )}
-            <button
-              className="digi-gallery-action-btn compare"
-              onClick={() => { toggleComparisonMode(); setEditMode(false); }}
-              style={{ opacity: current.type === 'photo' ? 1 : 0.4, pointerEvents: current.type === 'photo' ? 'auto' : 'none' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="1" y="3" width="10" height="18" rx="1" />
-                <rect x="13" y="3" width="10" height="18" rx="1" />
-              </svg>
-              <span>{comparisonMode ? 'EXIT CMP' : 'COMPARE'}</span>
-            </button>
-            <button
-              className="digi-gallery-action-btn edit"
-              onClick={() => { setEditMode(!editMode); if (comparisonMode) toggleComparisonMode(); }}
-              style={{ opacity: current.type === 'photo' ? 1 : 0.4, pointerEvents: current.type === 'photo' ? 'auto' : 'none' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-              <span>{editMode ? 'EXIT EDIT' : 'EDIT'}</span>
-            </button>
-            <button
-              className="digi-gallery-action-btn delete"
-              onClick={() => { deleteCapture(current.id); setShowInfo(false); }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-              <span>DEL</span>
-            </button>
-            <button
-              className="digi-gallery-action-btn download"
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = current.dataUrl;
-                a.download = `DSC${String(galleryIndex + 1).padStart(4, '0')}.${current.type === 'video' ? 'webm' : 'jpg'}`;
-                a.click();
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              <span>SAVE</span>
-            </button>
-            {'share' in navigator && (
-              <button
-                className="digi-gallery-action-btn share"
-                onClick={async () => {
-                  try {
-                    if (current.type === 'photo') {
-                      const res = await fetch(current.dataUrl);
-                      const blob = await res.blob();
-                      const file = new File([blob], `DSC${String(galleryIndex + 1).padStart(4, '0')}.jpg`, { type: 'image/jpeg' });
-                      await navigator.share({ files: [file], title: 'DigiCam Photo' });
-                    } else {
-                      await navigator.share({ title: 'DigiCam Video' });
-                    }
-                  } catch { /* Share cancelled */ }
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                  <polyline points="16 6 12 2 8 6" />
-                  <line x1="12" y1="2" x2="12" y2="15" />
-                </svg>
-                <span>SHARE</span>
-              </button>
-            )}
-            <button className="digi-gallery-action-btn select-btn" onClick={handleEnterSelect}>
-              <span>SELECT</span>
-            </button>
-            {captures.filter((c) => c.type === 'photo').length >= 2 && (
-              <button className="digi-gallery-action-btn" onClick={() => { setCollageMode(true); clearCollageSelection(); setEditMode(false); setCropMode(false); setShowInfo(false); }}>
-                <span>COLLAGE</span>
-              </button>
-            )}
-            {panoramaFrames.length >= 2 && (
-              <button className="digi-stitch-btn" onClick={handleStitch}>
-                <span>🔗</span><span>STITCH ({panoramaFrames.length})</span>
-              </button>
-            )}
-            <button
-              className="digi-gallery-action-btn"
-              onClick={() => { setPrintMode(true); setShowInfo(false); }}
-              style={{ opacity: current?.type === 'photo' ? 1 : 0.4 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="6" y="4" width="12" height="16" rx="1" />
-                <rect x="20" y="4" width="4" height="16" />
-                <line x1="18" y1="20" x2="18" y2="4" />
-              </svg>
-              <span>PRINT</span>
-            </button>
-            <button
-              className="digi-gallery-action-btn"
-              onClick={() => { setCompareTargetIndex(galleryIndex >= 1 ? galleryIndex - 1 : 0); setShowComparePanel(true); }}
-              style={{ opacity: captures.length >= 2 ? 1 : 0.4, position: 'relative' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3v18a2 2 0 0 1 2 2H4a2 2 0 0 1-2 2V3h14" />
-                <line x1="1" y1="6" x2="23" y2="6" />
-              </svg>
-              <span>COMPARE</span>
-            </button>
-          </>
-        )}
+      {/* Action dock */}
+      <div className="gal-dock">
+        <button
+          className={`gal-dock-btn ${likedIds.has(current.id) ? 'gal-liked' : ''}`}
+          onClick={() => setLikedIds((prev) => { const n = new Set(prev); if (n.has(current.id)) n.delete(current.id); else n.add(current.id); return n; })}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill={likedIds.has(current.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+        </button>
+        <button className="gal-dock-btn" onClick={() => {
+          const a = document.createElement('a');
+          a.href = current.dataUrl;
+          a.download = `DSC${String(galleryIndex + 1).padStart(4, '0')}.${current.type === 'video' ? 'webm' : 'jpg'}`;
+          a.click();
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
+        <button className="gal-dock-btn" onClick={() => { deleteCapture(current.id); setShowInfo(false); }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+        <button className="gal-dock-btn gal-dock-more" onClick={() => setShowMore(!showMore)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+          </svg>
+        </button>
       </div>
 
-      {/* Collage mode overlay */}
-      {collageMode && (
-        <div className="digi-collage-overlay">
-          <div style={{ fontSize: 10, color: '#aaa', fontFamily: 'monospace', marginBottom: 6 }}>COLLAGE MODE</div>
-          <div className={`digi-collage-grid ${collageType === '3x3' ? 'grid-3x3' : 'grid-2x2'}`}>
-            {captures.filter((c) => c.type === 'photo').map((cap) => {
-              const isSelected = selectedForCollage.includes(cap.id);
-              return (
-                <img
-                  key={cap.id}
-                  src={cap.dataUrl}
-                  alt=""
-                  className={`digi-collage-thumb ${isSelected ? 'collage-selected' : ''}`}
-                  onClick={() => {
-                    const maxForType = collageType === '2x2' ? 4 : 9;
-                    if (isSelected || selectedForCollage.length < maxForType) {
-                      toggleCollageSelect(cap.id);
-                    }
-                  }}
-                />
-              );
-            })}
+      {/* More actions sheet */}
+      {showMore && (
+        <>
+          <div className="gal-more-backdrop" onClick={() => setShowMore(false)} />
+          <div className="gal-more-sheet">
+            <div className="gal-more-handle" />
+            <div className="gal-more-grid">
+              {current.type === 'photo' && (
+                <button className="gal-more-item" onClick={() => { handleRotate(); setShowMore(false); }}>
+                  <div className="gal-more-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  </div>
+                  <span>Rotate</span>
+                </button>
+              )}
+              {'share' in navigator && (
+                <button className="gal-more-item" onClick={async () => { setShowMore(false); try { if (current.type === 'photo') { const res = await fetch(current.dataUrl); const blob = await res.blob(); const file = new File([blob], `DSC${String(galleryIndex + 1).padStart(4, '0')}.jpg`, { type: 'image/jpeg' }); await navigator.share({ files: [file], title: 'DigiCam Photo' }); } else { await navigator.share({ title: 'DigiCam Video' }); } } catch { /* cancelled */ } }}>
+                  <div className="gal-more-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  </div>
+                  <span>Share</span>
+                </button>
+              )}
+              {panoramaFrames.length >= 2 && (
+                <button className="gal-more-item" onClick={() => { handleStitch(); setShowMore(false); }}>
+                  <div className="gal-more-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12C2 6.5 6.5 2 12 2s10 4.5 10 10-4.5 10-10 10S2 17.5 2 12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>
+                  </div>
+                  <span>Stitch</span>
+                </button>
+              )}
+              {current.type === 'photo' && (
+                <button className="gal-more-item" onClick={() => { setShowInfo(!showInfo); setShowMore(false); }}>
+                  <div className="gal-more-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  </div>
+                  <span>Info</span>
+                </button>
+              )}
+            </div>
           </div>
-          <div className="digi-collage-controls">
-            <button
-              className={`digi-collage-btn digi-collage-type-btn ${collageType === '2x2' ? 'type-active' : ''}`}
-              onClick={() => { setCollageType('2x2'); clearCollageSelection(); }}
-            >2×2</button>
-            <button
-              className={`digi-collage-btn digi-collage-type-btn ${collageType === '3x3' ? 'type-active' : ''}`}
-              onClick={() => { setCollageType('3x3'); clearCollageSelection(); }}
-            >3×3</button>
-            <span className="digi-collage-counter">{selectedForCollage.length}/{collageType === '2x2' ? 4 : 9}</span>
-            <button
-              className="digi-collage-btn digi-collage-create-btn"
-              disabled={selectedForCollage.length !== (collageType === '2x2' ? 4 : 9)}
-              onClick={handleCreateCollage}
-            >CREATE</button>
-            <button
-              className="digi-collage-btn digi-collage-exit-btn"
-              onClick={() => { setCollageMode(false); clearCollageSelection(); }}
-            >EXIT</button>
-          </div>
-        </div>
+        </>
       )}
 
       {/* Double-tap to like */}

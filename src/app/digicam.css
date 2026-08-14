@@ -5306,3 +5306,273 @@ button, [role="button"] {
   gap: 0;
   margin-bottom: 22px; /* extra margin for zoom label */
 }
+
+/* ============================================================
+   GALLERY ACTION DOCK — Redesigned clean bottom panel
+   ============================================================ */
+
+/* --- Primary dock: 5 icon buttons --- */
+.gal-dock {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 20;
+  padding: 6px 10px;
+  background: rgba(10, 10, 14, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.5),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.gal-dock-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.gal-dock-btn:active {
+  transform: scale(0.88);
+}
+.gal-dock-btn:disabled {
+  opacity: 0.25;
+  pointer-events: none;
+}
+.gal-dock-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Like button — red when active */
+.gal-dock-btn.gal-liked {
+  color: #ff4466;
+}
+.gal-dock-btn.gal-liked svg {
+  filter: drop-shadow(0 0 6px rgba(255, 68, 102, 0.5));
+}
+
+/* Edit button — blue when active */
+.gal-dock-btn.gal-active {
+  color: #4499ff;
+  background: rgba(68, 153, 255, 0.12);
+  box-shadow: 0 0 0 1.5px rgba(68, 153, 255, 0.3);
+}
+
+/* Delete button — subtle red on hover */
+.gal-dock-btn:last-of-type:not(.gal-dock-more):hover {
+  color: #ff5555;
+  background: rgba(255, 50, 50, 0.1);
+}
+
+/* More button — separator */
+.gal-dock-more {
+  margin-left: 2px;
+  padding-left: 2px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.4);
+}
+.gal-dock-more:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* --- More sheet (slide-up action grid) --- */
+.gal-more-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 24;
+  animation: galFadeIn 0.15s ease-out;
+}
+@keyframes galFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.gal-more-sheet {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 16px);
+  max-width: 300px;
+  z-index: 25;
+  background: linear-gradient(180deg, #1e1e24 0%, #16161a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 10px 12px 14px;
+  box-shadow:
+    0 -4px 30px rgba(0, 0, 0, 0.5),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3);
+  animation: galSheetIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes galSheetIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.gal-more-handle {
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 auto 10px;
+}
+
+.gal-more-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.gal-more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 4px 8px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.gal-more-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.95);
+}
+.gal-more-item:active {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(0.95);
+}
+
+.gal-more-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.gal-more-item:hover .gal-more-icon {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.gal-more-item span {
+  font-family: var(--font-geist-mono), 'SF Pro Text', -apple-system, sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+/* --- Select mode bar --- */
+.gal-select-bar {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 20;
+  padding: 6px 10px;
+  background: rgba(10, 10, 14, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  animation: galSheetIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gal-select-bar-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: none;
+  font-family: var(--font-geist-mono), 'SF Pro Text', -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.gal-select-all {
+  background: rgba(68, 153, 255, 0.15);
+  color: #4499ff;
+}
+.gal-select-all:hover {
+  background: rgba(68, 153, 255, 0.25);
+}
+.gal-select-del {
+  background: rgba(255, 68, 68, 0.15);
+  color: #ff6666;
+}
+.gal-select-del:hover:not(:disabled) {
+  background: rgba(255, 68, 68, 0.25);
+}
+.gal-select-del:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.gal-select-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+}
+.gal-select-cancel:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.gal-select-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 4px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-geist-mono), monospace;
+  line-height: 1.2;
+}
+.gal-select-num {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+.gal-select-count span:last-child {
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
