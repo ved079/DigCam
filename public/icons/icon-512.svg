@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable: safe zone is center 80% = 102px inset each side -->
+  <rect width="512" height="512" fill="#1a1a1e"/>
+  <!-- Camera body -->
+  <rect x="76" y="172" width="360" height="228" fill="#2a2a2e" rx="20"/>
+  <!-- Viewfinder bump -->
+  <rect x="108" y="128" width="116" height="52" fill="#2a2a2e" rx="10"/>
+  <!-- Lens ring outer -->
+  <circle cx="256" cy="286" r="92" fill="#111" stroke="#444" stroke-width="7"/>
+  <circle cx="256" cy="286" r="66" fill="#0d0d0f" stroke="#333" stroke-width="5"/>
+  <circle cx="256" cy="286" r="38" fill="#1a1a1e"/>
+  <!-- Shutter button -->
+  <circle cx="400" cy="152" r="28" fill="#444"/>
+  <circle cx="400" cy="152" r="18" fill="#555"/>
+  <!-- Flash -->
+  <rect x="114" y="136" width="28" height="22" fill="#333" rx="5"/>
+  <!-- LED -->
+  <circle cx="424" cy="202" r="8" fill="#00dd44"/>
+  <!-- SONY text -->
+  <text x="256" y="368" text-anchor="middle" fill="#555" font-size="28" font-family="monospace" letter-spacing="12" font-weight="700">SONY</text>
+</svg>
