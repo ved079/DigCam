@@ -709,6 +709,27 @@
       #1e1e18 100%);
 }
 
+/* Flash not available on this device (iOS / no torch hardware) — visually
+   disabled so it clearly isn't a silently-broken button */
+.side-key--unsupported {
+  opacity: 0.4;
+  filter: grayscale(0.5);
+  cursor: not-allowed;
+  color: #555;
+  border-top-color: #444;
+}
+.side-key--unsupported .side-key-label { color: #3a3a3a; }
+.side-key--unsupported.side-key--on {
+  opacity: 0.5;
+  border-top-color: #444;
+  background:
+    linear-gradient(170deg,
+      #3e3e44 0%,
+      #2e2e34 35%,
+      #252528 65%,
+      #1e1e22 100%);
+}
+
 /* Hover — desktop only */
 @media (hover: hover) {
   .side-key:hover {

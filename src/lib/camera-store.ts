@@ -54,6 +54,13 @@ interface CameraStore {
   isDemoMode: boolean;
   isFlipping: boolean;
 
+  // Real hardware torch (MediaStreamTrack.applyConstraints) — synced with the
+  // actual track state, separate from the cosmetic `flashMode` preference.
+  torchEnabled: boolean;     // torch is actually on (mirrors the track)
+  torchSupported: boolean;   // feature-detected: does this camera expose torch?
+  torchBusy: boolean;        // a torch applyConstraints is in flight
+  torchError: string | null; // transient, user-facing torch failure message
+
   // Settings
   flashMode: FlashMode;
   sceneMode: SceneMode;
@@ -118,6 +125,10 @@ interface CameraStore {
   setCameraError: (error: string | null) => void;
   setDemoMode: (demo: boolean) => void;
   setFlipping: (flipping: boolean) => void;
+  setTorchEnabled: (enabled: boolean) => void;
+  setTorchSupported: (supported: boolean) => void;
+  setTorchBusy: (busy: boolean) => void;
+  setTorchError: (error: string | null) => void;
   setFlashMode: (mode: FlashMode) => void;
   setSceneMode: (mode: SceneMode) => void;
   setImageSize: (size: ImageSize) => void;
@@ -191,6 +202,11 @@ export const useCameraStore = create<CameraStore>((set, get) => ({
   isDemoMode: false,
   isFlipping: false,
 
+  torchEnabled: false,
+  torchSupported: false,
+  torchBusy: false,
+  torchError: null,
+
   flashMode: 'auto',
   sceneMode: 'AUTO',
   imageSize: '14M',
@@ -242,6 +258,10 @@ export const useCameraStore = create<CameraStore>((set, get) => ({
   setCameraError: (error) => set({ cameraError: error }),
   setDemoMode: (demo) => set({ isDemoMode: demo }),
   setFlipping: (flipping) => set({ isFlipping: flipping }),
+  setTorchEnabled: (enabled) => set({ torchEnabled: enabled }),
+  setTorchSupported: (supported) => set({ torchSupported: supported }),
+  setTorchBusy: (busy) => set({ torchBusy: busy }),
+  setTorchError: (error) => set({ torchError: error }),
   setFlashMode: (mode) => set({ flashMode: mode }),
   setSceneMode: (mode) => set({ sceneMode: mode }),
   setImageSize: (size) => set({ imageSize: size }),

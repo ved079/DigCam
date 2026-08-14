@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCameraStore, type CaptureItem } from '@/lib/camera-store';
+import { toast } from '@/hooks/use-toast';
 import { applyVideoCCDPass, renderDateStamp, renderDemoFrame, renderNeonFrame, renderCityFrame, renderIndoorFrame } from '@/lib/ccd-processor';
 import { saveCapture, loadCaptures, deleteCaptureFromDB, clearAllCaptures as clearDB } from '@/lib/db-persistence';
 import { BootScreen } from './BootScreen';
@@ -26,6 +27,14 @@ function getRandomGeo(): { latitude: number; longitude: number } {
     latitude: city.lat + (Math.random() - 0.5) * 0.1,
     longitude: city.lng + (Math.random() - 0.5) * 0.1,
   };
+}
+
+// Real web-browser torch (MediaStreamTrack torch) is an Android Chrome-only
+// capability; iOS Safari does not expose camera torch to web pages at all.
+function isIOSDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 }
 
 function getRealGeo(): Promise<{ latitude: number; longitude: number }> {
@@ -59,6 +68,7 @@ export function DigiCam() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const videoAnimRef = useRef<number>(0);
@@ -77,6 +87,8 @@ export function DigiCam() {
   const timelapseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const motionPrevFrameRef = useRef<ImageData | null>(null);
   const motionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const torchInFlightRef = useRef(false);
+  const torchRejectedRef = useRef<'on' | 'off' | null>(null);
   const [booted, setBooted] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [timerCountdown, setTimerCountdown] = useState<number | null>(null);
@@ -100,6 +112,9 @@ export function DigiCam() {
   const motionDetect = useCameraStore((s) => s.motionDetect);
   const motionSensitivity = useCameraStore((s) => s.motionSensitivity);
   const displayZoom = useCameraStore((s) => s.displayZoom);
+  const torchEnabled = useCameraStore((s) => s.torchEnabled);
+  const torchSupported = useCameraStore((s) => s.torchSupported);
+  const torchBusy = useCameraStore((s) => s.torchBusy);
 
   const {
     mode, isRecording, isFlashFiring, isFocusing, cameraReady, cameraError,
@@ -110,6 +125,7 @@ export function DigiCam() {
     cycleFilter, adjustExposure, toggleFacingMode, cycleBurst, cycleDemoScene,
     setBursting, setAspectMode, setPanoramaMode, addPanoramaFrame,
     setFlashMode, setSceneMode, setImageSize, setColorFilter, setExposureComp, setWhiteBalance, setBurstMode,
+    setTorchEnabled, setTorchSupported, setTorchBusy, setTorchError,
   } = useCameraStore();
 
   const initCamera = useCallback(async () => {
@@ -119,25 +135,109 @@ export function DigiCam() {
         audio: true,
       });
       streamRef.current = stream;
+      const track = stream.getVideoTracks()[0] ?? null;
+      videoTrackRef.current = track;
+      // Feature-detect the torch constraint — this is the ONLY reliable gate.
+      // iOS Safari and desktop cameras either omit `torch` entirely or report
+      // it as false, so we check key presence, not truthiness alone.
+      let supports = false;
+      try {
+        const caps = track?.getCapabilities ? track.getCapabilities() : undefined;
+        supports = !!caps && 'torch' in caps && caps.torch === true;
+      } catch { supports = false; }
+      setTorchSupported(supports);
+      if (!supports) {
+        // A camera without torch hardware can never hold torch on.
+        setTorchEnabled(false);
+        if (useCameraStore.getState().flashMode === 'on') setFlashMode('off');
+      }
+      torchRejectedRef.current = null;
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
       setCameraReady(true); setCameraError(null); setDemoMode(false);
     } catch { setCameraError('Camera access denied or unavailable.'); }
-  }, [facingMode, setCameraReady, setCameraError, setDemoMode]);
+  }, [facingMode, setCameraReady, setCameraError, setDemoMode, setTorchSupported, setTorchEnabled, setFlashMode]);
 
   const prevFacing = useRef(facingMode);
   useEffect(() => {
     if (prevFacing.current !== facingMode && cameraReady) {
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      videoTrackRef.current = null;
+      // The torch dies with the old camera; force UI state back to off so it
+      // can't drift. The reconciling effect re-applies it if the new camera
+      // supports it and the user still wants it.
+      setTorchEnabled(false);
       setCameraReady(false);
       prevFacing.current = facingMode;
       setTimeout(() => initCamera(), 100);
     }
-  }, [facingMode, cameraReady, initCamera, setCameraReady]);
+  }, [facingMode, cameraReady, initCamera, setCameraReady, setTorchEnabled]);
+
+  // ── Real hardware torch ────────────────────────────────────────────
+  // Torch is a continuous constraint on the active video track — there is no
+  // one-shot "flash at capture" API. So this turns the phone's flash LED on
+  // for the whole preview-and-capture session (a flashlight), not a xenon
+  // burst. It only exists while the getUserMedia stream is alive, and only on
+  // cameras that advertise the `torch` capability (Android Chrome rear
+  // camera; never iOS Safari).
+  const applyTorch = useCallback(async (on: boolean) => {
+    if (torchInFlightRef.current) return;
+    const track = videoTrackRef.current;
+    if (!track) return;
+    torchInFlightRef.current = true;
+    setTorchBusy(true);
+    try {
+      // `torch` is a non-standard constraint that lib.dom doesn't type, but
+      // it's the real android chrome path; cast to MediaTrackConstraintSet.
+      await track.applyConstraints({
+        advanced: [{ torch: on } as unknown as MediaTrackConstraintSet],
+      });
+      torchRejectedRef.current = null;
+      setTorchEnabled(on);
+      setTorchError(null);
+    } catch {
+      // The device/browser lied about supporting it — revert BOTH the
+      // hardware state and the UI so they can't drift apart.
+      torchRejectedRef.current = on ? 'on' : 'off';
+      setTorchEnabled(false);
+      setFlashMode('off');
+      setTorchError('Could not switch the camera flash on this device.');
+      toast({
+        title: 'Flash',
+        description: 'Could not switch the camera flash on this device.',
+        duration: 3000,
+      });
+    } finally {
+      torchInFlightRef.current = false;
+      setTorchBusy(false);
+    }
+  }, [setTorchBusy, setTorchEnabled, setTorchError, setFlashMode]);
+
+  // Keep the track in sync with the requested state whenever the preference,
+  // support detection, or actual state changes. `torchRejectedRef` records the
+  // last intent a track refused so we don't hammer applyConstraints on a
+  // hostile track, but it is cleared on every explicit flashMode change, so a
+  // fresh toggle by the user is always attempted again.
+  const prevFlashRef = useRef(flashMode);
+  useEffect(() => {
+    if (prevFlashRef.current !== flashMode) {
+      torchRejectedRef.current = null;
+      prevFlashRef.current = flashMode;
+    }
+    if (!torchSupported) return;
+    const wantOn = flashMode === 'on';
+    if (wantOn === torchEnabled) return;
+    if (torchRejectedRef.current === (wantOn ? 'on' : 'off')) return;
+    void applyTorch(wantOn);
+  }, [flashMode, torchSupported, torchEnabled, applyTorch]);
 
   useEffect(() => {
     initCamera();
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      videoTrackRef.current = null;
+      // Never leave the phone's flashlight on after leaving the camera view.
+      setTorchEnabled(false);
+      setTorchBusy(false);
       if (videoAnimRef.current) cancelAnimationFrame(videoAnimRef.current);
       if (zoomTimeoutRef.current) clearTimeout(zoomTimeoutRef.current);
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
@@ -724,13 +824,31 @@ export function DigiCam() {
       <SideControls
         facingMode={facingMode}
         flashMode={flashMode}
+        torchEnabled={torchEnabled}
+        torchSupported={torchSupported}
+        torchBusy={torchBusy}
         colorFilter={colorFilter}
         burstMode={burstMode}
         sceneMode={sceneMode}
         timerMode={timerMode}
         demoScene={demoScene}
         onFlip={() => { playClickSound(); toggleFacingMode(); }}
-        onFlash={() => { playClickSound(); window.clearTimeout(flashTimeoutRef.current); setFlashFiring(true); flashTimeoutRef.current = window.setTimeout(() => setFlashFiring(false), 400); cycleFlash(); }}
+        onFlash={() => {
+          playClickSound();
+          if (!torchSupported) {
+            toast({
+              title: 'Flash not supported on this device',
+              description: isIOSDevice()
+                ? 'iOS Safari does not expose camera flash/torch to web pages.'
+                : 'This camera/device has no torch (flashlight) capability.',
+              duration: 3000,
+            });
+            return;
+          }
+          // Continuous torch, not a one-shot burst: toggling the flash icon
+          // turns the LED on/off for the preview-and-capture session.
+          setFlashMode(flashMode === 'on' ? 'off' : 'on');
+        }}
         onFilter={() => { playClickSound(); cycleFilter(); }}
         onBurst={() => { playClickSound(); cycleBurst(); }}
         onScene={() => { playClickSound(); cycleScene(); }}
@@ -839,6 +957,9 @@ function Led({ color }: { color: string }) {
 type SideControlsProps = {
   facingMode: string;
   flashMode: string;
+  torchEnabled: boolean;
+  torchSupported: boolean;
+  torchBusy: boolean;
   colorFilter: string;
   burstMode: string;
   sceneMode: string;
@@ -853,14 +974,14 @@ type SideControlsProps = {
   onDemoScene: () => void;
 };
 
-function SideControls({ facingMode, flashMode, colorFilter, burstMode, sceneMode, timerMode, demoScene, onFlip, onFlash, onFilter, onBurst, onScene, onTimer, onDemoScene }: SideControlsProps) {
-  const flashLabel  = { off: 'OFF', auto: 'AUTO', on: 'ON', fill: 'FILL' }[flashMode]  ?? 'OFF';
+function SideControls({ facingMode, torchEnabled, torchSupported, torchBusy, colorFilter, burstMode, sceneMode, timerMode, demoScene, onFlip, onFlash, onFilter, onBurst, onScene, onTimer, onDemoScene }: SideControlsProps) {
   const filterLabel = colorFilter === 'off' ? 'OFF' : colorFilter.toUpperCase().slice(0, 4);
   const burstLabel  = burstMode   === 'off' ? 'OFF' : burstMode.toUpperCase();
   const timerLabel  = timerMode   === 'off' ? 'OFF' : timerMode;
 
-  // Flash LED color by mode
-  const flashLed = flashMode === 'auto' ? '#ffaa00' : flashMode === 'on' ? '#ffffff' : flashMode === 'fill' ? '#00ccff' : null;
+  // Real torch button trips three states: on / off / unsupported.
+  const torchOn = torchSupported && torchEnabled; // physical LED actually lit
+  const torchUnsupported = !torchSupported;
 
   return (
     <div className="digi-cam-side-controls">
@@ -870,10 +991,16 @@ function SideControls({ facingMode, flashMode, colorFilter, burstMode, sceneMode
         <span className="side-key-label">FLIP</span>
       </button>
 
-      <button className={`side-key ${flashMode !== 'off' ? 'side-key--on' : ''}`} onClick={onFlash} title="Flash">
-        {flashLed && <Led color={flashLed} />}
-        <IconFlash mode={flashMode} />
-        <span className="side-key-label">{flashLabel}</span>
+      <button
+        className={`side-key ${torchOn ? 'side-key--on' : ''} ${torchUnsupported ? 'side-key--unsupported' : ''}`}
+        onClick={onFlash}
+        title={torchUnsupported ? 'Flash not supported on this device' : torchOn ? 'Flash: on (tap to turn off)' : 'Flash: off (tap to turn on)'}
+        aria-disabled={torchUnsupported}
+      >
+        {torchOn && <Led color="#ffffff" />}
+        {torchBusy && torchSupported && <Led color="#666666" />}
+        <IconFlash mode={torchOn ? 'on' : 'off'} />
+        <span className="side-key-label">{torchOn ? 'ON' : torchUnsupported ? 'N/A' : 'OFF'}</span>
       </button>
 
       <div className="side-key-divider" />
