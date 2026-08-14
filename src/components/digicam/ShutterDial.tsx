@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CameraMode, BurstMode } from '@/lib/camera-store';
+import { useCameraStore } from '@/lib/camera-store';
 
 interface ShutterDialProps {
   mode: CameraMode;
@@ -42,16 +43,51 @@ const TICKS = Array.from({ length: 36 }, (_, i) => {
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
+// ── Motorized-dial spring ─────────────────────────────────────────────
+// A lightly underdamped spring (stepper-motor-ish): quick initial response,
+// a hair of overshoot, gentle deceleration into the final position. The SAME
+// constants drive the dial angle and the lens zoom, and both are integrated
+// inside a single rAF tick, so they always arrive in lockstep.
+//
+// While the finger is down the spring is much stiffer so the dial tracks the
+// hand tightly (the "weight" shows only as slight resistance); on release the
+// stiffness relaxes so both dial and lens coast and settle with momentum.
+const SPRING_STIFFNESS_ACTIVE = 1800;  // dragging: track the finger closely
+const SPRING_DAMPING_ACTIVE   = 75;    // near-critically damped, no float
+const SPRING_STIFFNESS        = 220;   // released: "stiffness" k
+const SPRING_DAMPING          = 19;    // damping coefficient c (settles ≈ 400ms)
+const SETTLE_EPS       = 0.0006; // |position − target| below which we stop
+const SETTLE_VEL       = 0.05;   // |velocity| below which we stop
+const TICK_DEG         = 10;     // detent grid — matches the SVG tick marks
+const DETENT_RANGE     = 3;      // deg either side of a tick where it pulls
+const DETENT_FORCE     = 60;     // restoring acceleration toward a detent
+const DETENT_MAX_SPEED = 90;     // deg/s — detent engages only when slower
+
 export function ShutterDial({
   mode, isRecording, isBursting, burstMode,
   zoomLevel, onShutter, onZoomIn, onZoomOut, onPlayClick,
 }: ShutterDialProps) {
+  // displayZoom is the animated value written by the spring loop below; the
+  // lens (DigiCam CCD pass) reads the very same value, so label + dial + lens
+  // can never visually desync.
+  const displayZoom = useCameraStore((s) => s.displayZoom);
+  const setDisplayZoom = useCameraStore((s) => s.setDisplayZoom);
+
   const [dialAngle, setDialAngle] = useState(0);
 
-  // Tracks zoom level for lock logic. Updated eagerly in handlers so back-to-back
-  // events see the right value before React re-renders. The store's own zoomIn/zoomOut
-  // actions read from current state (not a closure), so they always stack correctly.
-  const zoomLevelRef = useRef(zoomLevel);
+  // Targets update instantly from input; display values spring toward them.
+  const targetAngleRef     = useRef(0);
+  const dispAngleRef       = useRef(0);
+  const velAngleRef        = useRef(0);
+  const dispZoomRef        = useRef(zoomLevel);
+  const velZoomRef         = useRef(0);
+  const lastStoredZoomRef  = useRef(zoomLevel);
+  // Set true immediately before a dial-driven zoom change so the zoomLevel
+  // effect knows to animate (rather than snap) toward the new target.
+  const dialDrivenRef      = useRef(false);
+  const draggingRef        = useRef(false);
+  const rafRef             = useRef<number | null>(null);
+  const lastTimeRef        = useRef(0);
 
   const lastAngleRef  = useRef<number | null>(null);
   const accumRef      = useRef(0);
@@ -69,31 +105,116 @@ export function ShutterDial({
     return Math.hypot(clientX - (left + width / 2), clientY - (top + height / 2));
   }, []);
 
-  // ── Mouse wheel ──────────────────────────────────────────────
+  // ── Spring integration loop ────────────────────────────────────────
+  // Stored in a ref so the loop can re-schedule itself without a
+  // self-referencing callback (react-hooks/immutability rule).
+  const loopRef = useRef<(now: number) => void>(() => {});
+
+  useEffect(() => {
+    loopRef.current = (now: number) => {
+      rafRef.current = null;
+      const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
+      lastTimeRef.current = now;
+
+      const k = draggingRef.current ? SPRING_STIFFNESS_ACTIVE : SPRING_STIFFNESS;
+      const c = draggingRef.current ? SPRING_DAMPING_ACTIVE   : SPRING_DAMPING;
+
+      // Lens zoom: target is the store zoomLevel, which input sets instantly.
+      const zTarget = useCameraStore.getState().zoomLevel;
+      const zDiff = zTarget - dispZoomRef.current;
+      velZoomRef.current += (k * zDiff - c * velZoomRef.current) * dt;
+      dispZoomRef.current += velZoomRef.current * dt;
+      if (dispZoomRef.current < MIN_ZOOM) dispZoomRef.current = MIN_ZOOM;
+      if (dispZoomRef.current > MAX_ZOOM) dispZoomRef.current = MAX_ZOOM;
+
+      // Dial angle, plus a subtle click-stop detent that only engages while the
+      // dial is moving slowly (feels like a ratchet; disappears on a quick flick).
+      const aTarget = targetAngleRef.current;
+      const aDiff = aTarget - dispAngleRef.current;
+      let aAccel = k * aDiff - c * velAngleRef.current;
+      const speed = Math.abs(velAngleRef.current);
+      if (speed < DETENT_MAX_SPEED) {
+        let toCenter = ((dispAngleRef.current % TICK_DEG) + TICK_DEG) % TICK_DEG;
+        if (toCenter > TICK_DEG / 2) toCenter -= TICK_DEG;
+        if (Math.abs(toCenter) < DETENT_RANGE) {
+          aAccel += -toCenter * DETENT_FORCE * (1 - speed / DETENT_MAX_SPEED);
+        }
+      }
+      velAngleRef.current += aAccel * dt;
+      dispAngleRef.current += velAngleRef.current * dt;
+
+      setDialAngle(dispAngleRef.current);
+
+      // Push the animated zoom out so the lens/HUD follows in lockstep.
+      if (Math.abs(dispZoomRef.current - lastStoredZoomRef.current) > 1e-5) {
+        lastStoredZoomRef.current = dispZoomRef.current;
+        setDisplayZoom(dispZoomRef.current);
+      }
+
+      const settled =
+        Math.abs(aDiff) < SETTLE_EPS && Math.abs(velAngleRef.current) < SETTLE_VEL &&
+        Math.abs(zDiff) < 2e-4 && Math.abs(velZoomRef.current) < 2e-4;
+      if (!settled) rafRef.current = requestAnimationFrame(loopRef.current);
+    };
+  }, [setDisplayZoom]);
+
+  const startTween = useCallback(() => {
+    if (rafRef.current !== null) return;
+    lastTimeRef.current = performance.now();
+    rafRef.current = requestAnimationFrame(loopRef.current);
+  }, []);
+
+  // Boot sync: snap the animated value to the stored zoom so the camera does
+  // not "wind the lens in" on startup.
+  useEffect(() => {
+    const t = useCameraStore.getState().zoomLevel;
+    dispZoomRef.current = t;
+    velZoomRef.current = 0;
+    lastStoredZoomRef.current = t;
+    setDisplayZoom(t);
+  }, [setDisplayZoom]);
+
+  // External target changes (pinch, D-pad, menu, restored settings) snap the
+  // display to the target. Dial-driven changes flag themselves so the spring
+  // animates them with mechanical weight instead.
+  useEffect(() => {
+    if (dialDrivenRef.current) { dialDrivenRef.current = false; return; }
+    dispZoomRef.current = zoomLevel;
+    velZoomRef.current = 0;
+    lastStoredZoomRef.current = zoomLevel;
+    setDisplayZoom(zoomLevel);
+  }, [zoomLevel, setDisplayZoom]);
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  // ── Mouse wheel ───────────────────────────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
+    const target = useCameraStore.getState().zoomLevel;
     if (e.deltaY < 0) {
-      if (zoomLevelRef.current >= MAX_ZOOM) return;
-      // Update ref eagerly so back-to-back events see the new value
-      // before React re-renders and the useEffect can sync it.
-      zoomLevelRef.current = Math.min(MAX_ZOOM, zoomLevelRef.current + 1);
+      if (target >= MAX_ZOOM) return;
+      dialDrivenRef.current = true;
       onZoomIn();
-      setDialAngle(a => a + WHEEL_STEP_DEG);
+      targetAngleRef.current += WHEEL_STEP_DEG;
     } else {
-      if (zoomLevelRef.current <= MIN_ZOOM) return;
-      zoomLevelRef.current = Math.max(MIN_ZOOM, zoomLevelRef.current - 1);
+      if (target <= MIN_ZOOM) return;
+      dialDrivenRef.current = true;
       onZoomOut();
-      setDialAngle(a => a - WHEEL_STEP_DEG);
+      targetAngleRef.current -= WHEEL_STEP_DEG;
     }
-  }, [onZoomIn, onZoomOut]);
+    startTween();
+  }, [onZoomIn, onZoomOut, startTween]);
 
-  // ── Touch drag ───────────────────────────────────────────────
+  // ── Touch drag ────────────────────────────────────────────────────
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
     // Ignore touches that land inside the center-button zone
     const pxRadius = wrapperRef.current ? wrapperRef.current.offsetWidth / 2 : 50;
     const centerPx = pxRadius * (CENTER_HOLE / OUTER);
     if (getDistFromCenter(t.clientX, t.clientY) <= centerPx) return;
+    draggingRef.current = true;
     lastAngleRef.current = getAngleFromCenter(t.clientX, t.clientY);
     accumRef.current = 0;
   }, [getAngleFromCenter, getDistFromCenter]);
@@ -108,34 +229,27 @@ export function ShutterDial({
     if (delta < -180) delta += 360;
     lastAngleRef.current = current;
 
-    const z = zoomLevelRef.current;
-    const atMax = z >= MAX_ZOOM;
-    const atMin = z <= MIN_ZOOM;
-
+    const target = useCameraStore.getState().zoomLevel;
     // Block rotation (and accumulation) when already at a limit
-    if (delta > 0 && atMax) return;
-    if (delta < 0 && atMin) return;
+    if (delta > 0 && target >= MAX_ZOOM) return;
+    if (delta < 0 && target <= MIN_ZOOM) return;
 
-    setDialAngle(a => a + delta);
+    targetAngleRef.current += delta;
     accumRef.current += delta;
 
     if (accumRef.current >= ZOOM_STEP_DEG) {
-      if (zoomLevelRef.current < MAX_ZOOM) {
-        zoomLevelRef.current = Math.min(MAX_ZOOM, zoomLevelRef.current + 1);
-        onZoomIn();
-      }
+      if (target < MAX_ZOOM) { dialDrivenRef.current = true; onZoomIn(); }
       accumRef.current = 0;
     }
     if (accumRef.current <= -ZOOM_STEP_DEG) {
-      if (zoomLevelRef.current > MIN_ZOOM) {
-        zoomLevelRef.current = Math.max(MIN_ZOOM, zoomLevelRef.current - 1);
-        onZoomOut();
-      }
+      if (target > MIN_ZOOM) { dialDrivenRef.current = true; onZoomOut(); }
       accumRef.current = 0;
     }
-  }, [getAngleFromCenter, onZoomIn, onZoomOut]);
+    startTween();
+  }, [getAngleFromCenter, onZoomIn, onZoomOut, startTween]);
 
   const handleTouchEnd = useCallback(() => {
+    draggingRef.current = false;
     lastAngleRef.current = null;
     accumRef.current = 0;
   }, []);
@@ -155,6 +269,7 @@ export function ShutterDial({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       <svg className="shutter-dial-svg" viewBox="0 0 100 100" aria-hidden="true">
         {/* ── Static outer bezel (does not rotate) ── */}
@@ -174,7 +289,7 @@ export function ShutterDial({
           fill="rgba(255,255,255,0.55)"
         />
 
-        {/* ── Rotating group — tick marks spin with dialAngle ── */}
+        {/* ── Rotating group — tick marks spin with the animated dialAngle ── */}
         <g transform={`rotate(${dialAngle}, 50, 50)`}>
           {TICKS.map((t, i) => (
             <line
@@ -206,9 +321,9 @@ export function ShutterDial({
         <circle cx="50" cy="50" r={CENTER_HOLE} fill="#1a1a1e" />
       </svg>
 
-      {/* Zoom level readout */}
+      {/* Zoom level readout — counts in sync with the animated lens zoom */}
       <span className="shutter-dial-zoom-label">
-        {zoomLevel.toFixed(1)}<span className="shutter-dial-zoom-unit">×</span>
+        {displayZoom.toFixed(1)}<span className="shutter-dial-zoom-unit">×</span>
       </span>
 
       {/* Center shutter / record button */}

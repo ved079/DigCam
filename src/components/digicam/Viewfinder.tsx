@@ -3,7 +3,6 @@
 import { useCallback, useRef } from 'react';
 import type { FlashMode, SceneMode, ColorFilter, AspectMode, WhiteBalance, BurstMode, PanoramaMode } from '@/lib/camera-store';
 import { useCameraStore } from '@/lib/camera-store';
-import { TouchDPad } from './TouchDPad';
 
 interface ViewfinderProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -236,7 +235,6 @@ export function Viewfinder({
       {isRecording && (
         <canvas id="digi-audio-meter" width={80} height={32} className="digi-audio-meter-canvas" />
       )}
-      <TouchDPad />
       {panoramaMode === 'assist' && (
         <div className="digi-panorama-guide">
           <div className="digi-panorama-stitch-line" />
