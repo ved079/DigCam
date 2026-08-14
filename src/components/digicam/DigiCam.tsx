@@ -9,6 +9,7 @@ import { Viewfinder } from './Viewfinder';
 import { ControlPanel } from './ControlPanel';
 import { Gallery } from './Gallery';
 import { MenuOverlay } from './MenuOverlay';
+import { EVDial } from './EVDial';
 
 // Geotag cities for simulation
 const GEO_CITIES = [
@@ -66,6 +67,7 @@ export function DigiCam() {
   const demoAnimRef = useRef<number>(0);
   const burstIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const zoomTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const camBodyRef = useRef<HTMLDivElement>(null);
   const smileDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const smileDetectedRef = useRef(false);
@@ -97,6 +99,7 @@ export function DigiCam() {
   const isTimelapsing = useCameraStore((s) => s.isTimelapsing);
   const motionDetect = useCameraStore((s) => s.motionDetect);
   const motionSensitivity = useCameraStore((s) => s.motionSensitivity);
+  const displayZoom = useCameraStore((s) => s.displayZoom);
 
   const {
     mode, isRecording, isFlashFiring, isFocusing, cameraReady, cameraError,
@@ -136,6 +139,8 @@ export function DigiCam() {
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       if (videoAnimRef.current) cancelAnimationFrame(videoAnimRef.current);
+      if (zoomTimeoutRef.current) clearTimeout(zoomTimeoutRef.current);
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
       if (demoAnimRef.current) cancelAnimationFrame(demoAnimRef.current);
       if (timerTimeoutRef.current) clearTimeout(timerTimeoutRef.current);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -366,13 +371,34 @@ export function DigiCam() {
   // Demo mode animation
   useEffect(() => {
     if (!isDemoMode || mode === 'playback') return;
+    const renderScene = (target: HTMLCanvasElement, time: number) => {
+      if (demoScene === 'neon') renderNeonFrame(target, time, colorFilter);
+      else if (demoScene === 'city') renderCityFrame(target, time, colorFilter);
+      else if (demoScene === 'indoor') renderIndoorFrame(target, time, colorFilter);
+      else renderDemoFrame(target, time, colorFilter);
+    };
+    let offCanvas: HTMLCanvasElement | null = null;
     const animate = (time: number) => {
       const el = document.getElementById('ccd-preview-canvas') as HTMLCanvasElement;
       if (el) {
-        if (demoScene === 'neon') renderNeonFrame(el, time, colorFilter);
-        else if (demoScene === 'city') renderCityFrame(el, time, colorFilter);
-        else if (demoScene === 'indoor') renderIndoorFrame(el, time, colorFilter);
-        else renderDemoFrame(el, time, colorFilter);
+        const z = useCameraStore.getState().displayZoom;
+        const w = el.width;
+        const h = el.height;
+        if (z > 1) {
+          // Render the scene at a higher resolution, then center-crop like digital zoom
+          if (!offCanvas || offCanvas.width !== Math.round(w * z) || offCanvas.height !== Math.round(h * z)) {
+            offCanvas = document.createElement('canvas');
+            offCanvas.width = Math.round(w * z);
+            offCanvas.height = Math.round(h * z);
+          }
+          renderScene(offCanvas, time);
+          const ctx = el.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(offCanvas, (offCanvas.width - w) / 2, (offCanvas.height - h) / 2, w, h, 0, 0, w, h);
+          }
+        } else {
+          renderScene(el, time);
+        }
       }
       demoAnimRef.current = requestAnimationFrame(animate);
     };
@@ -389,7 +415,17 @@ export function DigiCam() {
     vCanvas.width = 640; vCanvas.height = 480;
     const processFrame = () => {
       if (!videoRef.current || !cameraReady || mode === 'playback') return;
-      vCtx.drawImage(videoRef.current, 0, 0, 640, 480);
+      const z = useCameraStore.getState().displayZoom;
+      const vw = videoRef.current.videoWidth || 640;
+      const vh = videoRef.current.videoHeight || 480;
+      if (z > 1) {
+        // Digital zoom: center-crop the source rect and scale up to fill the preview
+        const cw = vw / z;
+        const ch = vh / z;
+        vCtx.drawImage(videoRef.current, (vw - cw) / 2, (vh - ch) / 2, cw, ch, 0, 0, 640, 480);
+      } else {
+        vCtx.drawImage(videoRef.current, 0, 0, 640, 480);
+      }
       applyVideoCCDPass(vCanvas, colorFilter, exposureComp, whiteBalance);
       const previewEl = document.getElementById('ccd-preview-canvas') as HTMLCanvasElement;
       if (previewEl) { const pCtx = previewEl.getContext('2d'); if (pCtx) pCtx.drawImage(vCanvas, 0, 0, previewEl.width, previewEl.height); }
@@ -467,7 +503,14 @@ export function DigiCam() {
       if (!video) return;
       canvas.width = video.videoWidth || 4320;
       canvas.height = video.videoHeight || 3240;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const z = useCameraStore.getState().displayZoom;
+      if (z > 1) {
+        const cw = canvas.width / z;
+        const ch = canvas.height / z;
+        ctx.drawImage(video, (canvas.width - cw) / 2, (canvas.height - ch) / 2, cw, ch, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
       // Apply the same video CCD processing as the live preview (WYSIWYG)
       applyVideoCCDPass(canvas, colorFilter, exposureComp, whiteBalance, aspectMode);
 
@@ -484,6 +527,13 @@ export function DigiCam() {
     }
 
     if (showDateStamp) renderDateStamp(ctx, canvas.width, canvas.height, Date.now());
+    if (flashMode !== 'off') {
+      // Simulate flash illumination: brighten the saved frame so flash shots
+      // are visibly brighter than non-flash shots (WYSIWYG with the overlay).
+      ctx.filter = 'brightness(1.45)';
+      ctx.drawImage(canvas, 0, 0);
+      ctx.filter = 'none';
+    }
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     const geo = await getRealGeo();
     const capture: CaptureItem = {
@@ -500,7 +550,13 @@ export function DigiCam() {
     }
     setLastCapturePreview(dataUrl);
     setTimeout(() => setLastCapturePreview(null), 1200);
-    setFlashFiring(true); setTimeout(() => setFlashFiring(false), 200);
+    // Only fire the flash overlay when flash is actually active; leave the
+    // element mounted for the full double-flash animation (0.35s).
+    if (flashMode !== 'off') {
+      window.clearTimeout(flashTimeoutRef.current);
+      setFlashFiring(true);
+      flashTimeoutRef.current = window.setTimeout(() => setFlashFiring(false), 400);
+    }
     playShutterSound();
   }, [sceneMode, flashMode, showDateStamp, colorFilter, exposureComp, isDemoMode, whiteBalance, aspectMode, addCapture, setFlashFiring, addPanoramaFrame]);
 
@@ -630,7 +686,7 @@ export function DigiCam() {
           ) : booted ? (
             <>
               <Viewfinder
-                videoRef={videoRef} isFocusing={isFocusing} zoomLevel={zoomLevel}
+                videoRef={videoRef} isFocusing={isFocusing} zoomLevel={displayZoom}
                 sceneMode={sceneMode} flashMode={flashMode} showGrid={showGrid}
                 captureCount={captures.filter((c) => c.type === 'photo').length}
                 isRecording={isRecording} recordingTime={recordingTime} timerCountdown={timerCountdown}
@@ -652,24 +708,7 @@ export function DigiCam() {
       </div>
 
       {/* EV Exposure Dial */}
-      {mode !== 'playback' && (
-        <div className="digi-ev-dial">
-          <button className="digi-ev-btn ev-minus" onClick={() => { playClickSound(); adjustExposure(-0.3); }} title="Decrease Exposure">−</button>
-          <div className="digi-ev-track">
-            <div className="digi-ev-ticks">
-              {[-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2].map((v) => (
-                <div key={v} className={`digi-ev-tick ${Math.abs(exposureComp - v) < 0.15 ? 'tick-active' : ''}`} style={{ left: `${((v + 2) / 4) * 100}%` }}>
-                  <span className="tick-mark" />
-                  {v === 0 && <span className="tick-zero-label">0</span>}
-                </div>
-              ))}
-            </div>
-            <div className="digi-ev-pointer" style={{ left: `${((exposureComp + 2) / 4) * 100}%` }} />
-          </div>
-          <button className="digi-ev-btn ev-plus" onClick={() => { playClickSound(); adjustExposure(0.3); }} title="Increase Exposure">+</button>
-          <div className="digi-ev-value">{exposureComp === 0 ? '±0.0' : exposureComp > 0 ? `+${exposureComp.toFixed(1)}` : exposureComp.toFixed(1)}<span className="digi-ev-unit">EV</span></div>
-        </div>
-      )}
+      {mode !== 'playback' && <EVDial onPlayClick={playClickSound} />}
 
       <ControlPanel
         mode={mode} isRecording={isRecording}
@@ -691,7 +730,7 @@ export function DigiCam() {
         timerMode={timerMode}
         demoScene={demoScene}
         onFlip={() => { playClickSound(); toggleFacingMode(); }}
-        onFlash={() => { playClickSound(); setFlashFiring(true); setTimeout(() => setFlashFiring(false), 220); cycleFlash(); }}
+        onFlash={() => { playClickSound(); window.clearTimeout(flashTimeoutRef.current); setFlashFiring(true); flashTimeoutRef.current = window.setTimeout(() => setFlashFiring(false), 400); cycleFlash(); }}
         onFilter={() => { playClickSound(); cycleFilter(); }}
         onBurst={() => { playClickSound(); cycleBurst(); }}
         onScene={() => { playClickSound(); cycleScene(); }}

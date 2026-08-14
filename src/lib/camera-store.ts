@@ -59,7 +59,8 @@ interface CameraStore {
   sceneMode: SceneMode;
   imageSize: ImageSize;
   timerMode: TimerMode;
-  zoomLevel: number;
+  zoomLevel: number; // target zoom — set instantly by user input
+  displayZoom: number; // animated zoom — what the lens/HUD actually render
   showDateStamp: boolean;
   showGrid: boolean;
   colorFilter: ColorFilter;
@@ -122,6 +123,7 @@ interface CameraStore {
   setImageSize: (size: ImageSize) => void;
   setTimerMode: (mode: TimerMode) => void;
   setZoomLevel: (level: number) => void;
+  setDisplayZoom: (level: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   toggleDateStamp: () => void;
@@ -130,6 +132,7 @@ interface CameraStore {
   cycleFilter: () => void;
   setExposureComp: (ev: number) => void;
   adjustExposure: (delta: number) => void;
+  stepExposure: (dir: 1 | -1) => void;
   setFacingMode: (mode: FacingMode) => void;
   toggleFacingMode: () => void;
   setSlideshowActive: (active: boolean) => void;
@@ -193,6 +196,7 @@ export const useCameraStore = create<CameraStore>((set, get) => ({
   imageSize: '14M',
   timerMode: 'off',
   zoomLevel: 1,
+  displayZoom: 1,
   showDateStamp: true,
   showGrid: false,
   colorFilter: 'off',
@@ -243,6 +247,7 @@ export const useCameraStore = create<CameraStore>((set, get) => ({
   setImageSize: (size) => set({ imageSize: size }),
   setTimerMode: (mode) => set({ timerMode: mode }),
   setZoomLevel: (level) => set({ zoomLevel: Math.max(1, Math.min(4, level)) }),
+  setDisplayZoom: (level) => set({ displayZoom: Math.max(1, Math.min(4, level)) }),
   zoomIn:  () => set((s) => ({ zoomLevel: Math.min(4, s.zoomLevel + 1) })),
   zoomOut: () => set((s) => ({ zoomLevel: Math.max(1, s.zoomLevel - 1) })),
   toggleDateStamp: () => set((s) => ({ showDateStamp: !s.showDateStamp })),
@@ -256,6 +261,9 @@ export const useCameraStore = create<CameraStore>((set, get) => ({
   },
   setExposureComp: (ev) => set({ exposureComp: Math.max(-2, Math.min(2, ev)) }),
   adjustExposure: (delta) => set((s) => ({ exposureComp: Math.max(-2, Math.min(2, s.exposureComp + delta)) })),
+  stepExposure: (dir) => set((s) => ({
+    exposureComp: Math.max(-2, Math.min(2, Math.round((s.exposureComp + dir * 0.5) * 2) / 2)),
+  })),
   setFacingMode: (mode) => set({ facingMode: mode }),
   toggleFacingMode: () => {
     const current = get().facingMode;
