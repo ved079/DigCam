@@ -32,8 +32,7 @@ export function Gallery() {
   const [compareWidth, setCompareWidth] = useState(300);
   const lastTapRef = useRef(0);
   // Print preview state
-  const [printMode] = useState(false);
-  const [compareTargetIndex, setCompareTargetIndex] = useState(-1);
+  const [showMore, setShowMore] = useState(false);
   // Compute edit values from current capture
   const editBrightness = current?.editBrightness ?? 0;
   const editContrast = current?.editContrast ?? 0;
@@ -878,139 +877,140 @@ export function Gallery() {
         })}
       </div>
 
-      {/* Action buttons */}
-      <div className="digi-gallery-actions">
-        {selectMode ? (
-          <>
-            <button className="digi-gallery-action-btn select-active" onClick={handleSelectAll}>SELECT ALL</button>
-            <button className="digi-gallery-action-btn delete" onClick={handleDeleteSelected} disabled={selectCount === 0} style={{ opacity: selectCount === 0 ? 0.4 : 1 }}>DELETE ({selectCount})</button>
-            <button className="digi-gallery-action-btn" onClick={handleExitSelect}>CANCEL</button>
-          </>
-        ) : (
-          <>
-            <button className="digi-gallery-action-btn slideshow" onClick={() => { setSlideshowActive(!slideshowActive); }}>
-              <span>⏩</span><span>{slideshowActive ? 'STOP' : 'SLIDE'}</span>
-            </button>
-            {current.type === 'photo' && (
-              <button className="digi-gallery-action-btn rotate" onClick={handleRotate}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-                <span>ROTATE</span>
-              </button>
-            )}
+      {/* Action dock */}
+      {selectMode ? (
+        <div className="gal-select-bar">
+          <button className="gal-select-bar-btn gal-select-all" onClick={handleSelectAll}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <span>All</span>
+          </button>
+          <div className="gal-select-count">
+            <span className="gal-select-num">{selectCount}</span>
+            <span>selected</span>
+          </div>
+          <button className="gal-select-bar-btn gal-select-del" onClick={handleDeleteSelected} disabled={selectCount === 0}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Delete</span>
+          </button>
+          <button className="gal-select-bar-btn gal-select-cancel" onClick={handleExitSelect}>
+            <span>Done</span>
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="gal-dock">
             <button
-              className="digi-gallery-action-btn compare"
-              onClick={() => { toggleComparisonMode(); setEditMode(false); }}
-              style={{ opacity: current.type === 'photo' ? 1 : 0.4, pointerEvents: current.type === 'photo' ? 'auto' : 'none' }}
+              className={`gal-dock-btn ${likedIds.has(current.id) ? 'gal-liked' : ''}`}
+              onClick={() => setLikedIds((prev) => { const n = new Set(prev); if (n.has(current.id)) n.delete(current.id); else n.add(current.id); return n; })}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="1" y="3" width="10" height="18" rx="1" />
-                <rect x="13" y="3" width="10" height="18" rx="1" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={likedIds.has(current.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
               </svg>
-              <span>{comparisonMode ? 'EXIT CMP' : 'COMPARE'}</span>
             </button>
             <button
-              className="digi-gallery-action-btn edit"
-              onClick={() => { setEditMode(!editMode); if (comparisonMode) toggleComparisonMode(); }}
-              style={{ opacity: current.type === 'photo' ? 1 : 0.4, pointerEvents: current.type === 'photo' ? 'auto' : 'none' }}
+              className={`gal-dock-btn ${editMode ? 'gal-active' : ''}`}
+              onClick={() => { setEditMode(!editMode); setCropMode(false); if (comparisonMode) toggleComparisonMode(); setShowInfo(false); }}
+              disabled={current.type !== 'photo'}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
               </svg>
-              <span>{editMode ? 'EXIT EDIT' : 'EDIT'}</span>
             </button>
-            <button
-              className="digi-gallery-action-btn delete"
-              onClick={() => { deleteCapture(current.id); setShowInfo(false); }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <button className="gal-dock-btn" onClick={() => {
+              const a = document.createElement('a');
+              a.href = current.dataUrl;
+              a.download = `DSC${String(galleryIndex + 1).padStart(4, '0')}.${current.type === 'video' ? 'webm' : 'jpg'}`;
+              a.click();
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              <span>DEL</span>
             </button>
-            <button
-              className="digi-gallery-action-btn download"
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = current.dataUrl;
-                a.download = `DSC${String(galleryIndex + 1).padStart(4, '0')}.${current.type === 'video' ? 'webm' : 'jpg'}`;
-                a.click();
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+            <button className="gal-dock-btn" onClick={() => { deleteCapture(current.id); setShowInfo(false); }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
               </svg>
-              <span>SAVE</span>
             </button>
-            {'share' in navigator && (
-              <button
-                className="digi-gallery-action-btn share"
-                onClick={async () => {
-                  try {
-                    if (current.type === 'photo') {
-                      const res = await fetch(current.dataUrl);
-                      const blob = await res.blob();
-                      const file = new File([blob], `DSC${String(galleryIndex + 1).padStart(4, '0')}.jpg`, { type: 'image/jpeg' });
-                      await navigator.share({ files: [file], title: 'DigiCam Photo' });
-                    } else {
-                      await navigator.share({ title: 'DigiCam Video' });
-                    }
-                  } catch { /* Share cancelled */ }
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                  <polyline points="16 6 12 2 8 6" />
-                  <line x1="12" y1="2" x2="12" y2="15" />
-                </svg>
-                <span>SHARE</span>
-              </button>
-            )}
-            <button className="digi-gallery-action-btn select-btn" onClick={handleEnterSelect}>
-              <span>SELECT</span>
-            </button>
-            {captures.filter((c) => c.type === 'photo').length >= 2 && (
-              <button className="digi-gallery-action-btn" onClick={() => { setCollageMode(true); clearCollageSelection(); setEditMode(false); setCropMode(false); setShowInfo(false); }}>
-                <span>COLLAGE</span>
-              </button>
-            )}
-            {panoramaFrames.length >= 2 && (
-              <button className="digi-stitch-btn" onClick={handleStitch}>
-                <span>🔗</span><span>STITCH ({panoramaFrames.length})</span>
-              </button>
-            )}
-            <button
-              className="digi-gallery-action-btn"
-              onClick={() => { setPrintMode(true); setShowInfo(false); }}
-              style={{ opacity: current?.type === 'photo' ? 1 : 0.4 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="6" y="4" width="12" height="16" rx="1" />
-                <rect x="20" y="4" width="4" height="16" />
-                <line x1="18" y1="20" x2="18" y2="4" />
+            <button className="gal-dock-btn gal-dock-more" onClick={() => setShowMore(!showMore)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
               </svg>
-              <span>PRINT</span>
             </button>
-            <button
-              className="digi-gallery-action-btn"
-              onClick={() => { setCompareTargetIndex(galleryIndex >= 1 ? galleryIndex - 1 : 0); setShowComparePanel(true); }}
-              style={{ opacity: captures.length >= 2 ? 1 : 0.4, position: 'relative' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3v18a2 2 0 0 1 2 2H4a2 2 0 0 1-2 2V3h14" />
-                <line x1="1" y1="6" x2="23" y2="6" />
-              </svg>
-              <span>COMPARE</span>
-            </button>
-          </>
-        )}
-      </div>
+          </div>
+
+          {/* More actions sheet */}
+          {showMore && (
+            <>
+              <div className="gal-more-backdrop" onClick={() => setShowMore(false)} />
+              <div className="gal-more-sheet">
+                <div className="gal-more-handle" />
+                <div className="gal-more-grid">
+                  {current.type === 'photo' && (
+                    <button className="gal-more-item" onClick={() => { handleRotate(); setShowMore(false); }}>
+                      <div className="gal-more-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                      </div>
+                      <span>Rotate</span>
+                    </button>
+                  )}
+                  {current.type === 'photo' && captures.length >= 2 && (
+                    <button className="gal-more-item" onClick={() => { toggleComparisonMode(); setEditMode(false); setShowMore(false); }}>
+                      <div className="gal-more-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="10" height="18" rx="1"/><rect x="13" y="3" width="10" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2"/></svg>
+                      </div>
+                      <span>Compare</span>
+                    </button>
+                  )}
+                  <button className="gal-more-item" onClick={() => { setSlideshowActive(!slideshowActive); setShowMore(false); }}>
+                    <div className="gal-more-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" opacity="0.3"/></svg>
+                    </div>
+                    <span>Slideshow</span>
+                  </button>
+                  {'share' in navigator && (
+                    <button className="gal-more-item" onClick={async () => { setShowMore(false); try { if (current.type === 'photo') { const res = await fetch(current.dataUrl); const blob = await res.blob(); const file = new File([blob], `DSC${String(galleryIndex + 1).padStart(4, '0')}.jpg`, { type: 'image/jpeg' }); await navigator.share({ files: [file], title: 'DigiCam Photo' }); } else { await navigator.share({ title: 'DigiCam Video' }); } } catch { /* cancelled */ } }}>
+                      <div className="gal-more-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                      </div>
+                      <span>Share</span>
+                    </button>
+                  )}
+                  <button className="gal-more-item" onClick={() => { handleEnterSelect(); setShowMore(false); }}>
+                    <div className="gal-more-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    </div>
+                    <span>Select</span>
+                  </button>
+                  {captures.filter((c) => c.type === 'photo').length >= 2 && (
+                    <button className="gal-more-item" onClick={() => { setCollageMode(true); clearCollageSelection(); setEditMode(false); setCropMode(false); setShowInfo(false); setShowMore(false); }}>
+                      <div className="gal-more-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                      </div>
+                      <span>Collage</span>
+                    </button>
+                  )}
+                  {panoramaFrames.length >= 2 && (
+                    <button className="gal-more-item" onClick={() => { handleStitch(); setShowMore(false); }}>
+                      <div className="gal-more-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12C2 6.5 6.5 2 12 2s10 4.5 10 10-4.5 10-10 10S2 17.5 2 12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>
+                      </div>
+                      <span>Stitch</span>
+                    </button>
+                  )}
+                  {current.type === 'photo' && (
+                    <button className="gal-more-item" onClick={() => { setShowInfo(!showInfo); setEditMode(false); setShowMore(false); }}>
+                      <div className="gal-more-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                      </div>
+                      <span>Info</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       {/* Collage mode overlay */}
       {collageMode && (

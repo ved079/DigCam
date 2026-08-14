@@ -1391,3 +1391,30 @@ Stage Summary:
 - Verified via agent-browser: page loads, demo mode works, exposure dial adjusts correctly, photo capture with filter works, gallery playback works
 
 ---
+
+---
+Task ID: 13
+Agent: Main
+Task: Redesign gallery action panel - clean, aesthetic UI/UX
+
+Work Log:
+- Analyzed the existing cluttered action bar (10+ tiny buttons in a row, no hierarchy)
+- Designed a progressive disclosure pattern: 5 primary dock buttons + expandable more sheet
+- Replaced the entire action panel JSX in Gallery.tsx with new structure:
+  - Primary dock: Heart/Like, Edit, Download, Delete, More (3 dots)
+  - More sheet: 4-column grid with Rotate, Compare, Slideshow, Share, Select, Collage, Stitch, Info
+  - Select mode bar: Select All, count display, Delete, Done (pill-shaped buttons)
+- Added new CSS class system (gal-dock, gal-dock-btn, gal-more-sheet, gal-more-item, gal-select-bar)
+- Design choices: frosted glass pill dock, 40px circular touch targets, spring animation on sheet open, context-aware action visibility
+- Removed dead code: printMode state (never rendered), setShowComparePanel (never declared), broken COMPARE button
+- Replaced old .digi-gallery-actions and .digi-gallery-action-btn styles with new gal-* system
+
+Stage Summary:
+- Gallery action panel completely redesigned with clean, minimal aesthetic
+- Progressive disclosure: 5 primary actions always visible, 6-8 secondary in more sheet
+- Consistent 40px touch targets, spring animations, frosted glass material
+- Context-aware: photo-only actions hidden for videos, collage only when 2+ photos
+- Verified: page loads, demo mode works, gallery shows new dock, more sheet opens with action grid
+- No runtime errors
+
+---
