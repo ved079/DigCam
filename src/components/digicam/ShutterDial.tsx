@@ -207,23 +207,18 @@ export function ShutterDial({
     startTween();
   }, [onZoomIn, onZoomOut, startTween]);
 
-  // ── Touch drag ────────────────────────────────────────────────────
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const t = e.touches[0];
-    // Ignore touches that land inside the center-button zone
-    const pxRadius = wrapperRef.current ? wrapperRef.current.offsetWidth / 2 : 50;
-    const centerPx = pxRadius * (CENTER_HOLE / OUTER);
-    if (getDistFromCenter(t.clientX, t.clientY) <= centerPx) return;
-    draggingRef.current = true;
-    lastAngleRef.current = getAngleFromCenter(t.clientX, t.clientY);
-    accumRef.current = 0;
-  }, [getAngleFromCenter, getDistFromCenter]);
+  // ── Drag input — one unified Pointer Events code path ──────────────
+  // Pointer Events collapse mouse / touch / pen into a single event stream,
+  // and implicit pointer capture guarantees the dial keeps receiving
+  // pointermove/pointerup even after the pointer leaves its bounds — no
+  // window-level listener juggling and no parallel mouse-vs-touch state to
+  // drift apart. getAngleFromCenter() recomputes the dial's bounding rect
+  // fresh on EVERY move, so a viewport shift mid-drag can't go stale.
+  const activePointerIdRef = useRef<number | null>(null);
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+  const applyDragPoint = useCallback((clientX: number, clientY: number) => {
     if (lastAngleRef.current === null) return;
-    e.preventDefault();
-    const t = e.touches[0];
-    const current = getAngleFromCenter(t.clientX, t.clientY);
+    const current = getAngleFromCenter(clientX, clientY);
     let delta = current - lastAngleRef.current;
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;
@@ -248,11 +243,63 @@ export function ShutterDial({
     startTween();
   }, [getAngleFromCenter, onZoomIn, onZoomOut, startTween]);
 
-  const handleTouchEnd = useCallback(() => {
+  const beginDrag = useCallback((clientX: number, clientY: number, pointerId: number) => {
+    draggingRef.current = true;
+    lastAngleRef.current = getAngleFromCenter(clientX, clientY);
+    accumRef.current = 0;
+    activePointerIdRef.current = pointerId;
+  }, [getAngleFromCenter]);
+
+  const endDrag = useCallback(() => {
     draggingRef.current = false;
     lastAngleRef.current = null;
     accumRef.current = 0;
+    activePointerIdRef.current = null;
   }, []);
+
+  const isInCenterZone = useCallback((clientX: number, clientY: number) => {
+    const pxRadius = wrapperRef.current ? wrapperRef.current.offsetWidth / 2 : 50;
+    const centerPx = pxRadius * (CENTER_HOLE / OUTER);
+    return getDistFromCenter(clientX, clientY) <= centerPx;
+  }, [getDistFromCenter]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // Only the left mouse button can start a drag; touch/pen pointers carry
+    // no buttons, so this filter applies to mouse-type pointers alone.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (isInCenterZone(e.clientX, e.clientY)) return; // let the shutter button work
+    beginDrag(e.clientX, e.clientY, e.pointerId);
+    // Implicit pointer capture keeps THIS element on the receiving end of
+    // every subsequent pointermove/pointerup for this pointerId — even when
+    // the pointer slides outside the dial's bounds or the page would scroll.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // pointer already gone — the lostpointercapture path cleans up instead
+    }
+  }, [beginDrag, isInCenterZone]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerId !== activePointerIdRef.current) return;
+    applyDragPoint(e.clientX, e.clientY);
+  }, [applyDragPoint]);
+
+  // Shared by pointerup, pointercancel, and lostpointercapture. The
+  // activePointerId guard means stray events from other pointers (a second
+  // finger, a right-button release) can never end the wrong drag; on
+  // pointercancel/lostpointercapture the browser has already released the
+  // capture, so the releasePointerCapture call is guarded as a no-op.
+  const handlePointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerId !== activePointerIdRef.current) return;
+    endDrag();
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      // capture already released by the browser
+    }
+  }, [endDrag]);
 
   const centerClass = [
     'shutter-dial-center',
@@ -266,10 +313,12 @@ export function ShutterDial({
       ref={wrapperRef}
       className="shutter-dial-wrapper"
       onWheel={handleWheel}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      onLostPointerCapture={handlePointerEnd}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <svg className="shutter-dial-svg" viewBox="0 0 100 100" aria-hidden="true">
         {/* ── Static outer bezel (does not rotate) ── */}
