@@ -1418,3 +1418,27 @@ Stage Summary:
 - No runtime errors
 
 ---
+---
+Task ID: 1
+Agent: Main Agent
+Task: Remove Edit, Compare, Slideshow, Select, Collage buttons from Gallery
+
+Work Log:
+- Removed Edit (pencil) button from gallery dock
+- Removed Compare, Slideshow, Select, Collage from the more actions menu
+- Removed comparison mode display (before/after slider) from image area
+- Removed select mode bar (selectAll, deleteSelected, done)
+- Removed collage mode overlay (2x2/3x3 grid selector)
+- Removed slideshow auto-advance effect
+- Cleaned up unused state variables: slideshowActive, selectMode, collageMode, collageType, selectCount, isDraggingCompare, comparePos, compareWidth
+- Cleaned up unused store imports: comparisonMode, toggleComparisonMode, selectedIds, toggleSelect, selectAll, clearSelection, deleteSelected, selectedForCollage, toggleCollageSelect, clearCollageSelection
+- Cleaned up unused callbacks: handleEnterSelect, handleExitSelect, handleSelectAll, handleDeleteSelected, handleCompareMove, handleCompareMouseDown, handleCompareTouchStart, handleCreateCollage
+- Simplified thumbnail strip (removed select mode toggle)
+- Simplified action dock (removed selectMode ternary, always shows dock)
+- Verified no build errors, gallery works correctly in browser
+
+Stage Summary:
+- Gallery dock now has 4 buttons: Like, Download, Delete, More
+- More menu now has: Rotate, Share (conditional), Stitch (conditional), Info
+- Removed ~300 lines of code related to removed features
+- File reduced from 1068 to ~776 lines
