@@ -159,7 +159,7 @@ export function MenuOverlay({ onClose }: MenuOverlayProps) {
                 {getDisplayValue(item.key, item)}
                 {item.type !== 'action' && <span className="digi-menu-arrow">▶</span>}
                 {item.key === 'panoramaMode' && panoramaMode === 'assist' && panoramaFrames.length > 0 && (
-                  <span style={{ fontSize: 8, color: '#00cc66', marginLeft: 4 }}>{panoramaFrames.length} frames</span>
+                  <span className="digi-menu-pano-frames">{panoramaFrames.length} frames</span>
                 )}
               </span>
             </button>

@@ -39,6 +39,7 @@ export interface CaptureItem {
   editContrast?: number;
   editSaturation?: number;
   cropRect?: { x: number; y: number; w: number; h: number };
+  protected?: boolean;
 }
 
 interface CameraStore {
@@ -111,6 +112,17 @@ interface CameraStore {
   captures: CaptureItem[];
   galleryIndex: number;
   totalCapacity: number;
+
+  // Playback (gallery) state. The physical playback controls (D-pad, action
+  // strip) live outside the LCD, so this view state is kept in the store for
+  // both sides to share.
+  playbackView: 'single' | 'index';
+  playbackInfo: boolean;
+  playbackDelete: boolean;
+  playbackDeleteChoice: 'yes' | 'no';
+  playbackPan: { x: number; y: number }; // center % of the zoomed photo
+  playbackCursor: number; // index-grid cursor
+  playbackVideoPlaying: boolean;
 
   // Menu
   isMenuOpen: boolean;
@@ -190,6 +202,14 @@ interface CameraStore {
   selectAll: () => void;
   clearSelection: () => void;
   deleteSelected: () => void;
+  setPlaybackView: (view: 'single' | 'index') => void;
+  setPlaybackInfo: (info: boolean) => void;
+  setPlaybackDelete: (del: boolean) => void;
+  setPlaybackDeleteChoice: (choice: 'yes' | 'no') => void;
+  setPlaybackPan: (pan: { x: number; y: number }) => void;
+  setPlaybackCursor: (cursor: number) => void;
+  setPlaybackVideoPlaying: (playing: boolean) => void;
+  toggleProtectCapture: (id: string) => void;
 }
 
 export const useCameraStore = create<CameraStore>((set, get) => ({
@@ -246,6 +266,13 @@ export const useCameraStore = create<CameraStore>((set, get) => ({
   galleryIndex: 0,
   totalCapacity: 500,
   selectedIds: [],
+  playbackView: 'single',
+  playbackInfo: false,
+  playbackDelete: false,
+  playbackDeleteChoice: 'no',
+  playbackPan: { x: 50, y: 50 },
+  playbackCursor: 0,
+  playbackVideoPlaying: false,
 
   isMenuOpen: false,
   menuPage: 0,
@@ -412,5 +439,15 @@ export const useCameraStore = create<CameraStore>((set, get) => ({
   deleteSelected: () => set((s) => ({
     captures: s.captures.filter((c) => !s.selectedIds.includes(c.id)),
     selectedIds: [],
+  })),
+  setPlaybackView: (view) => set({ playbackView: view }),
+  setPlaybackInfo: (info) => set({ playbackInfo: info }),
+  setPlaybackDelete: (del) => set({ playbackDelete: del }),
+  setPlaybackDeleteChoice: (choice) => set({ playbackDeleteChoice: choice }),
+  setPlaybackPan: (pan) => set({ playbackPan: pan }),
+  setPlaybackCursor: (cursor) => set({ playbackCursor: cursor }),
+  setPlaybackVideoPlaying: (playing) => set({ playbackVideoPlaying: playing }),
+  toggleProtectCapture: (id) => set((s) => ({
+    captures: s.captures.map((c) => c.id === id ? { ...c, protected: !c.protected } : c),
   })),
 }));

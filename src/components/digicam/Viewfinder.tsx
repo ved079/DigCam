@@ -180,7 +180,7 @@ export function Viewfinder({
       )}
 
       {isDemoMode && (
-        <div style={{ position: 'absolute', bottom: 42, left: 8, fontSize: 8, color: 'rgba(0,102,204,0.5)', fontFamily: 'monospace', letterSpacing: 1, pointerEvents: 'none' }}>DEMO</div>
+        <div className="digi-demo-label">DEMO</div>
       )}
 
       {/* HUD Top */}

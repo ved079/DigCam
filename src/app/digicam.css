@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    Sony DSC-W530 Digital Camera Web App Styles
    Authentic CCD digicam simulation
    ============================================ */
@@ -367,6 +367,12 @@
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   white-space: nowrap;
 }
+.digi-demo-label {
+  position: absolute; bottom: 42px; left: 8px;
+  font-size: 8px; color: rgba(0,102,204,0.5);
+  font-family: var(--font-geist-mono), monospace;
+  letter-spacing: 1px; pointer-events: none;
+}
 
 /* Filter indicator */
 .digi-filter-badge {
@@ -627,21 +633,21 @@
 .counter-value { font-size: 20px; font-weight: 700; color: var(--lcd-amber); font-family: var(--font-geist-mono), monospace; text-shadow: 0 0 8px rgba(255,170,0,0.25); letter-spacing: 2px; }
 .counter-video { font-size: 7px; color: var(--lcd-red); font-family: var(--font-geist-mono), monospace; }
 
-/* ── Side control strip ───────────────────────────────────────────────── */
+/* â”€â”€ Side control strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .digi-cam-side-controls {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
   padding: 5px 10px 6px;
-  /* Recessed panel — slightly darker than camera body */
+  /* Recessed panel â€” slightly darker than camera body */
   background:
     linear-gradient(180deg, #131315 0%, #1a1a1e 30%, #161618 100%);
   border-top: 1px solid rgba(255,255,255,0.04);
   border-bottom: 1px solid rgba(0,0,0,0.6);
   position: relative;
 }
-/* Top-edge highlight — machined rim look */
+/* Top-edge highlight â€” machined rim look */
 .digi-cam-side-controls::before {
   content: '';
   position: absolute;
@@ -650,7 +656,7 @@
   background: linear-gradient(90deg, transparent 5%, rgba(255,255,255,0.07) 30%, rgba(255,255,255,0.07) 70%, transparent 95%);
 }
 
-/* ── Physical key cap ─────────────────────────────────────────────────── */
+/* â”€â”€ Physical key cap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .side-key {
   position: relative;
   display: flex;
@@ -662,7 +668,7 @@
   min-width: 38px;
   min-height: 44px;
   padding: 5px 6px 4px;
-  /* Key cap surface — domed gradient */
+  /* Key cap surface â€” domed gradient */
   background:
     linear-gradient(170deg,
       #3e3e44 0%,
@@ -697,7 +703,7 @@
   border-radius: 1px;
 }
 
-/* Active mode — key lights up slightly, thin amber top rail */
+/* Active mode â€” key lights up slightly, thin amber top rail */
 .side-key--on {
   color: #bbb;
   border-top-color: #aa8800;
@@ -709,7 +715,7 @@
       #1e1e18 100%);
 }
 
-/* Flash not available on this device (iOS / no torch hardware) — visually
+/* Flash not available on this device (iOS / no torch hardware) â€” visually
    disabled so it clearly isn't a silently-broken button */
 .side-key--unsupported {
   opacity: 0.4;
@@ -730,7 +736,7 @@
       #1e1e22 100%);
 }
 
-/* Hover — desktop only */
+/* Hover â€” desktop only */
 @media (hover: hover) {
   .side-key:hover {
     color: #ccc;
@@ -747,7 +753,7 @@
   }
 }
 
-/* Press — key physically depresses */
+/* Press â€” key physically depresses */
 .side-key:active {
   transform: translateY(1px);
   border-bottom-width: 1px;
@@ -757,7 +763,7 @@
   color: #ddd;
 }
 
-/* Label — engraved/printed on key surface */
+/* Label â€” engraved/printed on key surface */
 .side-key-label {
   font-size: 6px;
   font-weight: 700;
@@ -769,7 +775,7 @@
 .side-key--on .side-key-label { color: #888; }
 .side-key:active .side-key-label { color: #aaa; }
 
-/* LED indicator dot — top-right corner */
+/* LED indicator dot â€” top-right corner */
 .side-key-led {
   position: absolute;
   top: 4px;
@@ -836,13 +842,169 @@
 }
 .digi-gallery-nav-btn:active { background: rgba(255,255,255,0.18); }
 
-.digi-gallery-display { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; position: relative; min-height: 0; }
-.digi-gallery-image { max-width: 100%; max-height: 100%; object-fit: contain; }
+.digi-gallery-display { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+.digi-gallery-image { max-width: 100%; max-height: 100%; object-fit: contain; will-change: transform; }
 .digi-gallery-video { max-width: 100%; max-height: 100%; }
 .digi-gallery-video-thumb { position: relative; width: 100%; height: 100%; cursor: pointer; }
 .digi-gallery-video-preview { width: 100%; height: 100%; object-fit: contain; }
-.digi-play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); }
+.digi-play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); cursor: pointer; }
 .digi-play-triangle { width: 0; height: 0; border-left: 32px solid rgba(255,255,255,0.8); border-top: 22px solid transparent; border-bottom: 22px solid transparent; margin-left: 10px; }
+
+/* â”€â”€ Playback (gallery) â€” 2005 digicam playback redesign â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+/* Snappy mechanical nav transition (160ms, no springs) */
+.digi-gallery-transition {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  animation: digiNavIn 0.16s cubic-bezier(0.33, 0.66, 0.4, 1);
+}
+@keyframes digiNavIn {
+  from { opacity: 0; transform: translateX(6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Minimal LCD readout bar â€” battery + counter + protect, like the camera's info line */
+.digi-gallery-hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 3px 6px; z-index: 6; pointer-events: none;
+  font-family: var(--font-geist-mono), monospace;
+}
+.digi-gallery-hud-left { display: flex; align-items: center; gap: 5px; }
+.digi-gallery-counter { font-size: 9px; letter-spacing: 1.5px; color: rgba(255,255,255,0.8); }
+.digi-gallery-batt {
+  display: inline-block; position: relative;
+  width: 12px; height: 7px; padding: 1px;
+  border: 0.5px solid rgba(255,255,255,0.45); border-radius: 1px;
+  background: rgba(255,255,255,0.06);
+}
+.digi-gallery-batt::after {
+  content: ''; position: absolute; right: -2px; top: 1.5px;
+  width: 2px; height: 2.5px; background: rgba(255,255,255,0.45); border-radius: 1px;
+}
+.digi-gallery-batt-fill { display: block; height: 100%; background: #9dff7a; }
+.digi-protect-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 10px; height: 10px; padding: 0 1px;
+  font-size: 7px; line-height: 10px; font-family: var(--font-geist-mono), monospace;
+  color: #ffd76a; border: 0.5px solid rgba(255, 215, 106, 0.55);
+  background: rgba(0,0,0,0.35);
+}
+
+/* Index (thumbnail grid) view â€” 3 columns, hairline dividers, cursor border */
+.digi-index-grid {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 1px;
+  padding: 1px;
+  background: rgba(255,255,255,0.14);
+}
+.digi-index-cell {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: #000;
+  border: none; margin: 0; padding: 0;
+  overflow: hidden; min-width: 0; min-height: 0;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.digi-index-media { width: 100%; height: 100%; object-fit: contain; display: block; }
+.digi-index-cell.cell-cur {
+  outline: 2px solid #cc7a00; outline-offset: -2px;
+}
+.digi-index-play {
+  position: absolute; right: 3px; bottom: 2px;
+  font-size: 8px; color: rgba(255,255,255,0.85);
+  font-family: var(--font-geist-mono), monospace;
+}
+.digi-index-cell .digi-protect-badge { position: absolute; top: 2px; left: 2px; }
+
+/* Delete two-step confirm â€” flat monospace, YES/NO */
+.digi-delete-confirm {
+  position: absolute; inset: 0; z-index: 20;
+  background: rgba(4, 6, 8, 0.94);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px;
+  font-family: var(--font-geist-mono), monospace;
+  animation: digiDeleteIn 0.12s ease-out;
+}
+@keyframes digiDeleteIn { from { opacity: 0; } to { opacity: 1; } }
+.digi-delete-title {
+  font-size: 12px; letter-spacing: 2px; color: var(--lcd-white);
+  text-align: center; padding: 0 16px;
+}
+.digi-delete-options { display: flex; gap: 18px; }
+.digi-delete-opt {
+  min-width: 56px; padding: 7px 0;
+  background: transparent; border: 1px solid rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-geist-mono), monospace; font-size: 11px;
+  cursor: pointer; letter-spacing: 1px;
+}
+.digi-delete-opt.opt-sel {
+  border-color: var(--lcd-white); color: var(--lcd-white);
+  background: rgba(255,255,255,0.1);
+}
+.digi-delete-opt:active { background: rgba(255,255,255,0.16); }
+.digi-delete-go {
+  background: transparent; border: 1px solid rgba(255,80,80,0.6);
+  color: #ff8888; font-family: var(--font-geist-mono), monospace;
+  font-size: 10px; letter-spacing: 2px; padding: 5px 14px; cursor: pointer;
+}
+
+/* Physical playback controls on the camera body â€” D-pad + function strip */
+.digi-playback-controls {
+  display: flex; align-items: center; justify-content: center; gap: 20px;
+  padding: 8px 12px 10px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%),
+    var(--cam-black);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 -1px 0 rgba(0,0,0,0.3);
+}
+.digi-dpad {
+  display: grid;
+  grid-template-columns: 46px 54px 46px;
+  grid-template-rows: 46px 54px 46px;
+}
+.digi-dpad-btn {
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #3a3a3e 0%, #2b2b2f 100%);
+  border: 1px solid #444; border-radius: 6px;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.digi-dpad-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.35);
+}
+.digi-dpad-up { grid-column: 2; grid-row: 1; }
+.digi-dpad-left { grid-column: 1; grid-row: 2; }
+.digi-dpad-right { grid-column: 3; grid-row: 2; }
+.digi-dpad-down { grid-column: 2; grid-row: 3; }
+.digi-dpad-center {
+  grid-column: 2; grid-row: 2;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #202024 0%, #18181c 100%);
+  border: 1px solid #3a3a40; border-radius: 8px;
+  color: rgba(255,255,255,0.75);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px; letter-spacing: 1px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 12px rgba(0,0,0,0.4);
+}
+.digi-dpad-center:active { transform: scale(0.96); }
+.digi-playback-strip {
+  display: flex; flex-direction: column; gap: 6px;
+  min-width: 64px;
+}
+.digi-func-btn.func-active {
+  color: var(--lcd-white);
+  border-color: var(--sony-blue);
+  box-shadow: 0 0 10px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+}
 
 .digi-gallery-nav { display: flex; justify-content: center; gap: 40px; padding: 6px; }
 .digi-gallery-arrow {
@@ -858,17 +1020,129 @@
 .digi-gallery-arrow.disabled { opacity: 0.15; cursor: not-allowed; }
 
 .digi-gallery-info {
-  position: absolute; top: 0; right: 0; width: 65%;
-  background: rgba(0,0,0,0.75);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  padding: 8px 10px; z-index: 15;
-  border-left: 1px solid rgba(255,255,255,0.08);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  position: absolute;
+  top: 30px;
+  right: 6px;
+  width: min(250px, 80%);
+  z-index: 10;
+  background: rgba(7, 9, 11, 0.96);
+  border: 1px solid rgba(90, 230, 160, 0.22);
+  border-radius: 0;
+  padding: 9px 12px 10px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8);
+  animation: digiInfoIn 0.15s ease-out;
 }
-.digi-info-row { display: flex; justify-content: space-between; padding: 2px 0; }
-.digi-info-label { font-size: 9px; color: var(--lcd-dim); font-family: var(--font-geist-mono), monospace; letter-spacing: 0.5px; }
-.digi-info-value { font-size: 9px; color: var(--lcd-white); font-family: var(--font-geist-mono), monospace; }
+@keyframes digiInfoIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.digi-info-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(120, 240, 170, 0.14);
+}
+.digi-info-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #46ffa0;
+  box-shadow: 0 0 8px rgba(70, 255, 160, 0.9);
+  animation: infoLedBreathe 2.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes infoLedBreathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.digi-info-title {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  color: rgba(130, 245, 175, 0.95);
+}
+.digi-info-close {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(130, 245, 175, 0.6);
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.digi-info-close:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.digi-info-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+.digi-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.07);
+}
+.digi-info-row dt,
+.digi-info-row dd {
+  margin: 0;
+}
+.digi-info-rows .digi-info-row:last-child {
+  border-bottom: none;
+}
+.digi-info-label {
+  font-size: 9px;
+  color: rgba(110, 200, 150, 0.55);
+  font-family: var(--font-geist-mono), monospace;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.digi-info-value {
+  font-size: 9.5px;
+  color: #eafff2;
+  font-family: var(--font-geist-mono), monospace;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.digi-info-hist-wrap {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(120, 240, 170, 0.14);
+}
+.digi-info-hist-label {
+  display: block;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: rgba(110, 200, 150, 0.5);
+  margin-bottom: 5px;
+}
+.digi-info-hist {
+  width: 100%;
+  height: 48px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 0.5px solid rgba(120, 240, 170, 0.16);
+  display: block;
+  image-rendering: auto;
+}
 
 .digi-gallery-strip {
   display: flex; gap: 3px; padding: 4px 8px;
@@ -947,7 +1221,7 @@
   text-align: left; font-size: 12px;
 }
 .digi-menu-item::before {
-  content: '▶';
+  content: 'â–¶';
   position: absolute;
   left: 6px;
   top: 50%;
@@ -966,6 +1240,7 @@
   display: flex; align-items: center; gap: 4px;
 }
 .digi-menu-arrow { font-size: 8px; color: var(--lcd-dim); }
+.digi-menu-pano-frames { font-size: 8px; color: #00cc66; margin-left: 4px; font-family: var(--font-geist-mono), monospace; }
 .digi-menu-footer {
   display: flex; justify-content: space-between;
   padding: 6px 16px; border-top: 1px solid #333;
@@ -1665,7 +1940,7 @@
     rgba(255,255,255,0.04);
 }
 
-/* Duplicate responsive block removed — see canonical block above */
+/* Duplicate responsive block removed â€” see canonical block above */
 
 /* ============================================================
    TASK 3: MASSIVE CSS STYLING IMPROVEMENTS
@@ -2575,7 +2850,7 @@
 /* ========== END TASK 4 ========== */
 
 /* ============================================================
-   TASK 6d: VLM RATING 8/10 → 10/10 DETAIL IMPROVEMENTS
+   TASK 6d: VLM RATING 8/10 â†’ 10/10 DETAIL IMPROVEMENTS
    10 specific visual fixes identified by VLM analysis
    ============================================================ */
 
@@ -2874,7 +3149,7 @@
 }
 
 /* ========== 6d-10: Zoom Bar Enhancement ========== */
-/* Gradient fill bar: green → yellow → red */
+/* Gradient fill bar: green â†’ yellow â†’ red */
 .digi-zoom-fill {
   background: linear-gradient(90deg,
     #00cc44 0%,
@@ -3039,7 +3314,7 @@
 /* ========== END TASK 6e ========== */
 
 /* ============================================================
-   TASK 7c: VLM-DIRECTED CSS REALISM OVERHAUL (7.5/10 → 9+/10)
+   TASK 7c: VLM-DIRECTED CSS REALISM OVERHAUL (7.5/10 â†’ 9+/10)
    10 specific material/depth/texture improvements
    ============================================================ */
 
@@ -3715,7 +3990,7 @@
 /* -----------------------------------------------------------------------
    Enhancement 14: Flash overlay double pulse
    NOTE: Already implemented with `flashDoubleFire` keyframes (line ~2105)
-   providing a bright flash → dim → second brighter flash pattern.
+   providing a bright flash â†’ dim â†’ second brighter flash pattern.
    Skipping to avoid overriding the existing high-quality implementation.
    ----------------------------------------------------------------------- */
 
@@ -4338,14 +4613,6 @@
     inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
-/* 9. Gallery info panel glass effect */
-.digi-gallery-info {
-  backdrop-filter: blur(6px) saturate(1.2);
-  -webkit-backdrop-filter: blur(6px) saturate(1.2);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 0 12px rgba(0,0,0,0.3);
-}
-
 /* 10. Power LED hue shift */
 .digi-cam-led.led-on {
   animation: ledBreathe 3s ease-in-out infinite, ledHueShift 8s ease-in-out infinite;
@@ -4767,7 +5034,7 @@
   z-index: 21;
 }
 .digi-compare-divider::before {
-  content: '‹';
+  content: 'â€¹';
   position: absolute;
   top: 50%;
   left: 50%;
@@ -4888,7 +5155,7 @@
   pointer-events: none;
 }
 
-/* ── Buttons ─────────────────────────────────── */
+/* â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .digi-ev-btn {
   width: 28px; height: 28px;
   border-radius: 50%;
@@ -4931,7 +5198,7 @@
 .digi-ev-btn.ev-minus { color: #66aaff; }
 .digi-ev-btn.ev-plus  { color: #ffaa44; }
 
-/* ── Track ───────────────────────────────────── */
+/* â”€â”€ Track â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .digi-ev-track {
   flex: 1;
   height: 28px;
@@ -4962,7 +5229,7 @@
   transition: left 0.18s ease-out, width 0.18s ease-out;
 }
 
-/* ── Ticks ───────────────────────────────────── */
+/* â”€â”€ Ticks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .digi-ev-ticks {
   position: absolute;
   inset: 0;
@@ -4976,26 +5243,26 @@
   transform: translateX(-50%);
 }
 
-/* Half-step (default) — faintest */
+/* Half-step (default) â€” faintest */
 .tick-mark {
   display: block;
   width: 1px; height: 7px;
   background: rgba(255,255,255,0.13);
   border-radius: 1px;
 }
-/* Whole-number ticks — medium */
+/* Whole-number ticks â€” medium */
 .digi-ev-tick.tick-whole .tick-mark {
   width: 1.5px; height: 11px;
   background: rgba(255,255,255,0.32);
 }
-/* Zero tick — boldest / home position */
+/* Zero tick â€” boldest / home position */
 .digi-ev-tick.tick-zero .tick-mark {
   width: 2px; height: 16px;
   background: rgba(255,255,255,0.65);
   box-shadow: 0 0 3px rgba(255,255,255,0.2);
 }
 
-/* Active tick — accent orange, inherits tier height */
+/* Active tick â€” accent orange, inherits tier height */
 .digi-ev-tick.tick-active .tick-mark {
   background: #cc5500;
   box-shadow: 0 0 5px rgba(204,85,0,0.7), 0 0 10px rgba(204,85,0,0.3);
@@ -5011,7 +5278,7 @@
   pointer-events: none;
 }
 
-/* ── Pointer — downward triangle ─────────────── */
+/* â”€â”€ Pointer â€” downward triangle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .digi-ev-pointer {
   position: absolute;
   top: 2px;
@@ -5026,7 +5293,7 @@
   pointer-events: none;
 }
 
-/* ── Value readout ───────────────────────────── */
+/* â”€â”€ Value readout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes ev-value-flash {
   0%   { opacity: 1; transform: scale(1); }
   30%  { opacity: 1; transform: scale(1.12); color: #ffcc88; }
@@ -5057,7 +5324,7 @@
 
 /* ============================================================
    MOBILE-FIRST PHASE 1
-   Safe areas · touch feedback · hover guards · tap targets
+   Safe areas Â· touch feedback Â· hover guards Â· tap targets
    ============================================================ */
 
 /* --- Safe area insets (iPhone notch / home indicator) ---
@@ -5096,7 +5363,7 @@
       linear-gradient(90deg, rgba(0,255,68,0.03) 0%, transparent 40%, rgba(0,255,68,0.01) 100%),
       rgba(255,255,255,0.04);
   }
-  /* Shutter proximity glow — desktop/mouse only aesthetic */
+  /* Shutter proximity glow â€” desktop/mouse only aesthetic */
   .digi-shutter-area:hover .digi-shutter-btn {
     box-shadow:
       0 0 0 2px rgba(0,180,255,0.12),
@@ -5134,7 +5401,7 @@ button, [role="button"] {
 }
 
 /* ============================================================
-   SHUTTER DIAL — rotary ring for zoom, center for capture
+   SHUTTER DIAL â€” rotary ring for zoom, center for capture
    ============================================================ */
 
 .shutter-dial-wrapper {
@@ -5164,7 +5431,7 @@ button, [role="button"] {
   pointer-events: none; /* ring interactivity is on the wrapper */
 }
 
-/* Zoom level readout — sits below the ring */
+/* Zoom level readout â€” sits below the ring */
 .shutter-dial-zoom-label {
   position: absolute;
   bottom: -18px;
@@ -5189,7 +5456,7 @@ button, [role="button"] {
   color: var(--lcd-dim);
 }
 
-/* ── Center shutter button ── */
+/* â”€â”€ Center shutter button â”€â”€ */
 .shutter-dial-center {
   position: absolute;
   top: 50%;
@@ -5241,7 +5508,7 @@ button, [role="button"] {
   border-bottom-color: #555;
 }
 
-/* Video ready state — red ring */
+/* Video ready state â€” red ring */
 .shutter-dial-center.video-ready {
   border-color: var(--lcd-red);
   box-shadow:
@@ -5250,7 +5517,7 @@ button, [role="button"] {
     inset 0 1px 2px rgba(255,255,255,0.1);
 }
 
-/* Recording state — pulsing red */
+/* Recording state â€” pulsing red */
 .shutter-dial-center.recording {
   border-color: var(--lcd-red);
   box-shadow:
@@ -5300,279 +5567,111 @@ button, [role="button"] {
   box-shadow: 0 0 6px rgba(255,0,0,0.4);
 }
 
-/* ── Shrink shutter-area gap since dial is self-contained ── */
+/* â”€â”€ Shrink shutter-area gap since dial is self-contained â”€â”€ */
 .digi-shutter-area {
   justify-content: center;
   gap: 0;
   margin-bottom: 22px; /* extra margin for zoom label */
 }
 
-/* ============================================================
-   GALLERY ACTION DOCK — Redesigned clean bottom panel
-   ============================================================ */
+/* ============================================
+   LANDSCAPE REFLOW — touch device held sideways
+   The camera body becomes a horizontal rig: LCD on the
+   left, physical controls stacked on the right side.
+   Pure layout via [data-orientation] — no component
+   duplication; gallery state is untouched by rotation.
+   ============================================ */
 
-/* --- Primary dock: 5 icon buttons --- */
-.gal-dock {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+.digi-cam-controls-stack {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  z-index: 20;
-  padding: 6px 10px;
-  background: rgba(10, 10, 14, 0.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 22px;
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.5),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  flex-direction: column;
 }
 
-.gal-dock-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  position: relative;
-  -webkit-tap-highlight-color: transparent;
-  flex-shrink: 0;
-}
-.gal-dock-btn:active {
-  transform: scale(0.88);
-}
-.gal-dock-btn:disabled {
-  opacity: 0.25;
-  pointer-events: none;
-}
-.gal-dock-btn:hover {
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-/* Like button — red when active */
-.gal-dock-btn.gal-liked {
-  color: #ff4466;
-}
-.gal-dock-btn.gal-liked svg {
-  filter: drop-shadow(0 0 6px rgba(255, 68, 102, 0.5));
-}
-
-/* Edit button — blue when active */
-.gal-dock-btn.gal-active {
-  color: #4499ff;
-  background: rgba(68, 153, 255, 0.12);
-  box-shadow: 0 0 0 1.5px rgba(68, 153, 255, 0.3);
-}
-
-/* Delete button — subtle red on hover */
-.gal-dock-btn:last-of-type:not(.gal-dock-more):hover {
-  color: #ff5555;
-  background: rgba(255, 50, 50, 0.1);
-}
-
-/* More button — separator */
-.gal-dock-more {
-  margin-left: 2px;
-  padding-left: 2px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.4);
-}
-.gal-dock-more:hover {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* --- More sheet (slide-up action grid) --- */
-.gal-more-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  z-index: 24;
-  animation: galFadeIn 0.15s ease-out;
-}
-@keyframes galFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.gal-more-sheet {
-  position: absolute;
-  bottom: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 16px);
-  max-width: 300px;
-  z-index: 25;
-  background: linear-gradient(180deg, #1e1e24 0%, #16161a 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 10px 12px 14px;
-  box-shadow:
-    0 -4px 30px rgba(0, 0, 0, 0.5),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3);
-  animation: galSheetIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes galSheetIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(8px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-.gal-more-handle {
-  width: 28px;
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.15);
-  margin: 0 auto 10px;
-}
-
-.gal-more-grid {
+.digi-cam-body[data-orientation='landscape'] {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-}
-
-.gal-more-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 10px 4px 8px;
-  border-radius: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  width: 100%;
+  height: 100dvh;
+  max-height: none;
+  min-height: 100dvh;
+  margin: 0 auto;
+  border-radius: 0;
   border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.65);
-  cursor: pointer;
-  transition: all 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-.gal-more-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.95);
-}
-.gal-more-item:active {
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(0.95);
+  overflow: hidden;
+  background: #161618;
 }
 
-.gal-more-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.digi-cam-body[data-orientation='landscape'] .digi-cam-strap,
+.digi-cam-body[data-orientation='landscape'] .digi-cam-lens-barrel,
+.digi-cam-body[data-orientation='landscape'] .digi-cam-bottom-branding,
+.digi-cam-body[data-orientation='landscape'] .digi-cam-tripod-mount {
+  display: none;
+}
+
+.digi-cam-body[data-orientation='landscape'] .digi-cam-top-bar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.digi-cam-body[data-orientation='landscape'] .digi-cam-lcd-frame {
+  grid-column: 1;
+  grid-row: 2 / 5;
+  min-height: 0;
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  padding: 8px;
+}
+
+.digi-cam-body[data-orientation='landscape'] .digi-cam-lcd-frame .digi-cam-lcd {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  aspect-ratio: auto;
+  min-height: 0;
+}
+
+.digi-cam-body[data-orientation='landscape'] .digi-cam-controls-stack {
+  grid-column: 2;
+  grid-row: 2 / 4;
   justify-content: center;
-  transition: all 0.15s;
-}
-.gal-more-item:hover .gal-more-icon {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.gal-more-item span {
-  font-family: var(--font-geist-mono), 'SF Pro Text', -apple-system, sans-serif;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  white-space: nowrap;
-}
-
-/* --- Select mode bar --- */
-.gal-select-bar {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
+  padding: 10px;
   gap: 6px;
-  z-index: 20;
-  padding: 6px 10px;
-  background: rgba(10, 10, 14, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  animation: galSheetIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: auto;
+  max-width: 36dvw;
+  min-width: 210px;
 }
 
-.gal-select-bar-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border-radius: 12px;
-  border: none;
-  font-family: var(--font-geist-mono), 'SF Pro Text', -apple-system, sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  transition: all 0.15s;
-  -webkit-tap-highlight-color: transparent;
-  white-space: nowrap;
-}
-.gal-select-all {
-  background: rgba(68, 153, 255, 0.15);
-  color: #4499ff;
-}
-.gal-select-all:hover {
-  background: rgba(68, 153, 255, 0.25);
-}
-.gal-select-del {
-  background: rgba(255, 68, 68, 0.15);
-  color: #ff6666;
-}
-.gal-select-del:hover:not(:disabled) {
-  background: rgba(255, 68, 68, 0.25);
-}
-.gal-select-del:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-.gal-select-cancel {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
-}
-.gal-select-cancel:hover {
-  background: rgba(255, 255, 255, 0.12);
+.digi-cam-body[data-orientation='landscape'] .digi-cam-side-controls {
+  grid-column: 2;
+  grid-row: 4;
 }
 
-.gal-select-count {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0 4px;
-  color: rgba(255, 255, 255, 0.4);
-  font-family: var(--font-geist-mono), monospace;
-  line-height: 1.2;
+.digi-cam-body[data-orientation='landscape'] .digi-playback-controls {
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.gal-select-num {
-  font-size: 16px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.8);
+
+/* Wider grid: the LCD is wide in landscape, so 3 columns stretch */
+.digi-cam-body[data-orientation='landscape'] .digi-index-grid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 2px;
 }
-.gal-select-count span:last-child {
-  font-size: 7px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+
+/* DISP panel becomes a right-side rail, vertically centered */
+.digi-cam-body[data-orientation='landscape'] .digi-gallery-info {
+  top: 50%;
+  right: 8px;
+  left: auto;
+  bottom: auto;
+  transform: translateY(-50%);
+  width: min(230px, 40%);
+  max-height: calc(100% - 34px);
+  overflow-y: auto;
 }
+
+.digi-cam-body[data-orientation='landscape'] .digi-gallery-hud {
+  padding: 3px 8px;
+}
+

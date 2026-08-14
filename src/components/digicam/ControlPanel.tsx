@@ -18,12 +18,13 @@ interface ControlPanelProps {
   isBursting: boolean;
   aspectMode: AspectMode;
   onPlayClick: () => void;
+  onDelete: () => void;
 }
 
 export function ControlPanel({
   mode, isRecording, captureCount, videoCount,
   onShutter, onModeSwitch, onMenu, onZoomIn, onZoomOut,
-  zoomLevel, burstMode, isBursting, aspectMode, onPlayClick,
+  zoomLevel, burstMode, isBursting, aspectMode, onPlayClick, onDelete,
 }: ControlPanelProps) {
   return (
     <div className="digi-controls">
@@ -78,7 +79,7 @@ export function ControlPanel({
 
       <div className="digi-bottom-row">
         <button className="digi-func-btn" onClick={() => { onPlayClick(); onMenu(); }} title="Menu"><span>MENU</span></button>
-        <button className="digi-func-btn" onClick={() => { onPlayClick(); }} title="Delete">
+        <button className="digi-func-btn" onClick={() => { onPlayClick(); onDelete(); }} title="Delete">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="3 6 5 6 21 6" />
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />

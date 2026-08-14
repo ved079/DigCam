@@ -1,16 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCameraStore, type CaptureItem } from '@/lib/camera-store';
+import { useOrientation } from '@/hooks/useOrientation';
 import { toast } from '@/hooks/use-toast';
 import { applyVideoCCDPass, renderDateStamp, renderDemoFrame, renderNeonFrame, renderCityFrame, renderIndoorFrame } from '@/lib/ccd-processor';
 import { saveCapture, loadCaptures, deleteCaptureFromDB, clearAllCaptures as clearDB } from '@/lib/db-persistence';
+import { formatCompactDateTime } from '@/lib/utils';
 import { BootScreen } from './BootScreen';
 import { Viewfinder } from './Viewfinder';
 import { ControlPanel } from './ControlPanel';
 import { Gallery } from './Gallery';
 import { MenuOverlay } from './MenuOverlay';
 import { EVDial } from './EVDial';
+import { PlaybackControls } from './PlaybackControls';
 
 // Geotag cities for simulation
 const GEO_CITIES = [
@@ -126,7 +129,18 @@ export function DigiCam() {
     setBursting, setAspectMode, setPanoramaMode, addPanoramaFrame,
     setFlashMode, setSceneMode, setImageSize, setColorFilter, setExposureComp, setWhiteBalance, setBurstMode,
     setTorchEnabled, setTorchSupported, setTorchBusy, setTorchError,
+    setPlaybackView, setPlaybackInfo, setPlaybackDelete, setPlaybackDeleteChoice,
+    setPlaybackPan, setPlaybackCursor, setPlaybackVideoPlaying,
   } = useCameraStore();
+
+  // Landscape reflow applies to touch devices held sideways; a desktop monitor
+  // reports landscape-primary but should keep the portrait camera presentation.
+  const orientation = useOrientation();
+  const isTouchDevice = useMemo(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: none) and (pointer: coarse)').matches,
+    [],
+  );
+  const isLandscape = orientation === 'landscape' && isTouchDevice;
 
   const initCamera = useCallback(async () => {
     try {
@@ -158,6 +172,18 @@ export function DigiCam() {
   }, [facingMode, setCameraReady, setCameraError, setDemoMode, setTorchSupported, setTorchEnabled, setFlashMode]);
 
   const prevFacing = useRef(facingMode);
+  // Entering playback resets playback-scoped state so a capture-session zoom
+  // or stale overlay never leaks into the gallery.
+  useEffect(() => {
+    if (mode !== 'playback') return;
+    setZoomLevel(1);
+    setPlaybackView('single');
+    setPlaybackInfo(false);
+    setPlaybackDelete(false);
+    setPlaybackDeleteChoice('no');
+    setPlaybackPan({ x: 50, y: 50 });
+    setPlaybackVideoPlaying(false);
+  }, [mode, setZoomLevel, setPlaybackView, setPlaybackInfo, setPlaybackDelete, setPlaybackDeleteChoice, setPlaybackPan, setPlaybackVideoPlaying]);
   useEffect(() => {
     if (prevFacing.current !== facingMode && cameraReady) {
       streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -639,7 +665,7 @@ export function DigiCam() {
     const capture: CaptureItem = {
       id: `cap_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       type: 'photo', dataUrl, timestamp: Date.now(), sceneMode, flashMode,
-      dateStamp: new Date().toLocaleString(), filter: colorFilter, exposure: exposureComp,
+      dateStamp: formatCompactDateTime(Date.now()), filter: colorFilter, exposure: exposureComp,
       whiteBalance, aspectMode, latitude: geo.latitude, longitude: geo.longitude,
     };
     addCapture(capture);
@@ -700,7 +726,7 @@ export function DigiCam() {
     mr.onstop = () => {
       const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
       const url = URL.createObjectURL(blob);
-      const videoCapture = { id: `vid_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, type: 'video', dataUrl: url, timestamp: Date.now(), sceneMode, flashMode, dateStamp: new Date().toLocaleString(), videoBlob: blob, filter: colorFilter, exposure: exposureComp, whiteBalance, aspectMode };
+      const videoCapture = { id: `vid_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, type: 'video', dataUrl: url, timestamp: Date.now(), sceneMode, flashMode, dateStamp: formatCompactDateTime(Date.now()), videoBlob: blob, filter: colorFilter, exposure: exposureComp, whiteBalance, aspectMode };
       addCapture(videoCapture);
       saveCapture(videoCapture as unknown as Record<string, unknown>).catch(() => {});
       setLastCapturePreview(url); setTimeout(() => setLastCapturePreview(null), 1200);
@@ -750,7 +776,7 @@ export function DigiCam() {
   }, [mode, isRecording, isMenuOpen, timerMode, isDemoMode, burstMode, capturePhoto, setFocusing, setMenuOpen, startRecording, stopRecording, doBurst]);
 
   return (
-    <div className="digi-cam-body" ref={camBodyRef}>
+    <div className="digi-cam-body" ref={camBodyRef} data-orientation={isLandscape ? 'landscape' : 'portrait'}>
       <video ref={videoRef} className="hidden" playsInline muted />
       <canvas ref={canvasRef} className="hidden" />
 
@@ -807,19 +833,32 @@ export function DigiCam() {
         </div>
       </div>
 
-      {/* EV Exposure Dial */}
-      {mode !== 'playback' && <EVDial onPlayClick={playClickSound} />}
+      <div className="digi-cam-controls-stack">
+        {/* EV Exposure Dial */}
+        {mode !== 'playback' && <EVDial onPlayClick={playClickSound} />}
 
-      <ControlPanel
-        mode={mode} isRecording={isRecording}
-        captureCount={captures.filter((c) => c.type === 'photo').length}
-        videoCount={captures.filter((c) => c.type === 'video').length}
-        onShutter={handleShutter} onModeSwitch={setMode}
-        onMenu={() => setMenuOpen(!isMenuOpen)}
-        onZoomIn={zoomIn} onZoomOut={zoomOut}
-        zoomLevel={zoomLevel} burstMode={burstMode} isBursting={isBursting} aspectMode={aspectMode}
-        onPlayClick={playClickSound}
-      />
+        <ControlPanel
+          mode={mode} isRecording={isRecording}
+          captureCount={captures.filter((c) => c.type === 'photo').length}
+          videoCount={captures.filter((c) => c.type === 'video').length}
+          onShutter={handleShutter} onModeSwitch={setMode}
+          onMenu={() => setMenuOpen(!isMenuOpen)}
+          onZoomIn={zoomIn} onZoomOut={zoomOut}
+          zoomLevel={zoomLevel} burstMode={burstMode} isBursting={isBursting} aspectMode={aspectMode}
+          onPlayClick={playClickSound}
+          onDelete={() => {
+            if (mode !== 'playback') return;
+            const st = useCameraStore.getState();
+            const cur = st.captures[st.galleryIndex];
+            if (!cur || cur.protected) return; // protected images are undeletable, like the real camera
+            if (st.playbackDelete) { st.setPlaybackDelete(false); return; } // DEL again dismisses
+            st.setPlaybackDeleteChoice('no');
+            st.setPlaybackDelete(true);
+          }}
+        />
+
+        {mode === 'playback' && <PlaybackControls />}
+      </div>
 
       <SideControls
         facingMode={facingMode}

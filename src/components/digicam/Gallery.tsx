@@ -1,37 +1,76 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useCameraStore } from '@/lib/camera-store';
-import { saveCapture } from '@/lib/db-persistence';
+import { deleteCaptureFromDB } from '@/lib/db-persistence';
+import { formatCompactDateTime } from '@/lib/utils';
 
-function formatCoord(val: number, pos: string, neg: string): string {
+function formatDMS(val: number, pos: string, neg: string): string {
   const abs = Math.abs(val);
   const dir = val >= 0 ? pos : neg;
-  return `${abs.toFixed(4)}\u00B0${dir}`;
+  const deg = Math.floor(abs);
+  const minF = (abs - deg) * 60;
+  const min = Math.floor(minF);
+  const sec = ((minF - min) * 60).toFixed(1);
+  return `${deg}\u00B0${String(min).padStart(2, '0')}'${sec}"${dir}`;
+}
+
+function PlaybackBattery() {
+  return (
+    <span className="digi-gallery-batt" aria-label="Battery">
+      <span className="digi-gallery-batt-fill" style={{ width: '70%' }} />
+    </span>
+  );
 }
 
 export function Gallery() {
-  const {
-    captures, galleryIndex, setGalleryIndex, deleteCapture, setMode, setCaptureRotation,
-    updateCaptureEdit, updateCaptureDataUrl, updateCaptureCrop,
-    panoramaFrames, clearPanoramaFrames, addCapture,
-  } = useCameraStore();
-  const [showInfo, setShowInfo] = useState(false);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const current = captures[galleryIndex];
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const lastTapRef = useRef(0);
-  // Print preview state
-  const [showMore, setShowMore] = useState(false);
-  // Compute edit values from current capture
-  const editBrightness = current?.editBrightness ?? 0;
-  const editContrast = current?.editContrast ?? 0;
-  const editSaturation = current?.editSaturation ?? 0;
-  const currentId = current?.id;
+  const captures = useCameraStore((s) => s.captures);
+  const galleryIndex = useCameraStore((s) => s.galleryIndex);
+  const setGalleryIndex = useCameraStore((s) => s.setGalleryIndex);
+  const setMode = useCameraStore((s) => s.setMode);
+  const playbackView = useCameraStore((s) => s.playbackView);
+  const setPlaybackView = useCameraStore((s) => s.setPlaybackView);
+  const playbackInfo = useCameraStore((s) => s.playbackInfo);
+  const setPlaybackInfo = useCameraStore((s) => s.setPlaybackInfo);
+  const playbackDelete = useCameraStore((s) => s.playbackDelete);
+  const setPlaybackDelete = useCameraStore((s) => s.setPlaybackDelete);
+  const playbackDeleteChoice = useCameraStore((s) => s.playbackDeleteChoice);
+  const setPlaybackDeleteChoice = useCameraStore((s) => s.setPlaybackDeleteChoice);
+  const playbackPan = useCameraStore((s) => s.playbackPan);
+  const playbackCursor = useCameraStore((s) => s.playbackCursor);
+  const setPlaybackCursor = useCameraStore((s) => s.setPlaybackCursor);
+  const playbackVideoPlaying = useCameraStore((s) => s.playbackVideoPlaying);
+  const setPlaybackVideoPlaying = useCameraStore((s) => s.setPlaybackVideoPlaying);
+  const zoomLevel = useCameraStore((s) => s.zoomLevel);
+  const deleteCapture = useCameraStore((s) => s.deleteCapture);
 
-  // Draw histogram in info overlay
+  const current = captures[galleryIndex];
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const shownId = current?.id;
+
+  // Clamp indices whenever captures shrink (e.g. after a delete).
   useEffect(() => {
-    if (!showInfo || !current || current.type === 'video') return;
+    if (captures.length === 0) return;
+    if (galleryIndex >= captures.length) setGalleryIndex(captures.length - 1);
+    if (playbackCursor >= captures.length) setPlaybackCursor(captures.length - 1);
+  }, [captures.length, galleryIndex, playbackCursor, setGalleryIndex, setPlaybackCursor]);
+
+  // Stop video playback whenever the shown capture changes.
+  useEffect(() => {
+    setPlaybackVideoPlaying(false);
+  }, [shownId, setPlaybackVideoPlaying]);
+
+  // Play/pause the current video when the D-pad center toggles it.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (playbackVideoPlaying) v.play().catch(() => {});
+    else v.pause();
+  }, [playbackVideoPlaying, shownId]);
+
+  // Draw histogram in the DISP info overlay.
+  useEffect(() => {
+    if (!playbackInfo || !current || current.type === 'video') return;
     const canvas = document.getElementById('gallery-histogram') as HTMLCanvasElement;
     if (!canvas) return;
     const img = new Image();
@@ -63,7 +102,6 @@ export function Gallery() {
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(0, 0, W, H);
-      // Draw RGB channels (faint)
       const drawChannel = (bins: Uint32Array, color: string) => {
         const max = Math.max(...bins) || 1;
         ctx.strokeStyle = color;
@@ -79,7 +117,6 @@ export function Gallery() {
       drawChannel(rBins, 'rgba(255,80,80,0.3)');
       drawChannel(gBins, 'rgba(80,255,80,0.3)');
       drawChannel(bBins, 'rgba(80,80,255,0.3)');
-      // Draw luminance (white)
       const lumMax = Math.max(...lumBins) || 1;
       ctx.strokeStyle = 'rgba(255,255,255,0.7)';
       ctx.lineWidth = 1;
@@ -92,267 +129,30 @@ export function Gallery() {
       ctx.stroke();
     };
     img.src = current.dataUrl;
-  }, [showInfo, current]);
-
-  // Reset edit mode when switching images
-  const [editMode, setEditMode] = useState(false);
-  const [cropMode, setCropMode] = useState(false);
-  // Watermark state
-  const [watermarkText, setWatermarkText] = useState('');
-  const [watermarkPos, setWatermarkPos] = useState<'tl' | 'tr' | 'bl' | 'br'>('br');
-  const [watermarkSize, setWatermarkSize] = useState(24);
-  const [cropRect, setCropRect] = useState({ x: 25, y: 25, w: 50, h: 50 });
-  const cropContainerRef = useRef<HTMLDivElement>(null);
-  const cropDraggingRef = useRef(false);
-  const lastEditIdRef = useRef(currentId);
-  // Reset edit mode when image changes (derived check, not effect)
-  if (lastEditIdRef.current !== currentId) {
-    lastEditIdRef.current = currentId;
-    if (editMode) setEditMode(false);
-    if (cropMode) setCropMode(false);
-    setWatermarkText('');
-  }
-
-  // Rotate photo
-  const handleRotate = useCallback(() => {
-    if (!current || current.type === 'video') return;
-    const newRot = ((current.rotation || 0) + 90) % 360;
-    setCaptureRotation(current.id, newRot);
-    saveCapture({ ...current, rotation: newRot } as unknown as Record<string, unknown>).catch(() => {});
-  }, [current, setCaptureRotation]);
-
-  // Double-tap to like
-  useEffect(() => {
-    const el = document.getElementById('gallery-display');
-    if (!el) return;
-    const handler = () => {
-      const now = Date.now();
-      if (now - lastTapRef.current < 300 && current) {
-        setLikedIds((prev) => {
-          const next = new Set(prev);
-          if (prev.has(current.id)) next.delete(current.id); else next.add(current.id);
-          return next;
-        });
-      }
-      lastTapRef.current = now;
-    };
-    el.addEventListener('touchend', handler, { passive: true });
-    return () => el.removeEventListener('touchend', handler);
-  }, [current, likedIds]);
+  }, [playbackInfo, current]);
 
   const goNext = useCallback(() => {
     if (galleryIndex < captures.length - 1) {
       setGalleryIndex(galleryIndex + 1);
-      setShowInfo(false);
-      setIsVideoPlaying(false);
+      setPlaybackInfo(false);
     }
-  }, [galleryIndex, captures.length, setGalleryIndex]);
+  }, [galleryIndex, captures.length, setGalleryIndex, setPlaybackInfo]);
 
   const goPrev = useCallback(() => {
     if (galleryIndex > 0) {
       setGalleryIndex(galleryIndex - 1);
-      setShowInfo(false);
-      setIsVideoPlaying(false);
+      setPlaybackInfo(false);
     }
-  }, [galleryIndex, setGalleryIndex]);
+  }, [galleryIndex, setGalleryIndex, setPlaybackInfo]);
 
-  const goBack = useCallback(() => {
-    setMode('photo');
-    setIsVideoPlaying(false);
-  }, [setMode]);
-
-  // Burn in watermark
-  const handleBurnIn = useCallback(() => {
-    if (!current || current.type === 'video' || !watermarkText.trim()) return;
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      // Draw existing image (with current filter edits if any)
-      ctx.filter = `brightness(${1 + editBrightness / 100}) contrast(${1 + editContrast / 100}) saturate(${1 + editSaturation / 100})`;
-      ctx.drawImage(img, 0, 0);
-      ctx.filter = 'none';
-      // Calculate text position
-      const fontSize = Math.round(watermarkSize * (img.width / 640));
-      ctx.font = `bold ${fontSize}px monospace`;
-      ctx.fillStyle = 'rgba(255,255,255,0.8)';
-      ctx.shadowColor = 'rgba(0,0,0,0.7)';
-      ctx.shadowBlur = fontSize / 3;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 1;
-      const padding = fontSize;
-      let x = 0;
-      let y = 0;
-      if (watermarkPos === 'tl') { x = padding; y = fontSize + padding / 2; ctx.textAlign = 'left'; }
-      else if (watermarkPos === 'tr') { x = img.width - padding; y = fontSize + padding / 2; ctx.textAlign = 'right'; }
-      else if (watermarkPos === 'bl') { x = padding; y = img.height - padding / 2; ctx.textAlign = 'left'; }
-      else { x = img.width - padding; y = img.height - padding / 2; ctx.textAlign = 'right'; }
-      ctx.fillText(watermarkText, x, y);
-      const newDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      updateCaptureDataUrl(current.id, newDataUrl);
-      saveCapture({ ...current, dataUrl: newDataUrl, editBrightness: 0, editContrast: 0, editSaturation: 0 } as unknown as Record<string, unknown>).catch(() => {});
-      setWatermarkText('');
-    };
-    img.src = current.dataUrl;
-  }, [current, watermarkText, watermarkPos, watermarkSize, editBrightness, editContrast, editSaturation, updateCaptureDataUrl]);
-
-  // Stitch panorama
-  const handleStitch = useCallback(() => {
-    if (panoramaFrames.length < 2) return;
-    const loadImages = panoramaFrames.map((src) => {
-      return new Promise<HTMLImageElement>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(img);
-        img.src = src;
-      });
-    });
-    Promise.all(loadImages).then((images) => {
-      const validImages = images.filter((img) => img.width > 0 && img.height > 0);
-      if (validImages.length < 2) return;
-      const height = Math.max(...validImages.map((img) => img.height));
-      const totalWidth = validImages.reduce((sum, img) => sum + img.width, 0);
-      const canvas = document.createElement('canvas');
-      canvas.width = totalWidth;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, totalWidth, height);
-      let offsetX = 0;
-      for (const img of validImages) {
-        const yOffset = Math.round((height - img.height) / 2);
-        ctx.drawImage(img, offsetX, yOffset, img.width, img.height);
-        offsetX += img.width;
-      }
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      const panoramaCapture: { id: string; type: 'photo'; dataUrl: string; timestamp: number; sceneMode: string; flashMode: string; dateStamp: string; filter?: string; exposure?: number; whiteBalance?: { temperature: number; tint: number }; aspectMode?: string } = {
-        id: `pano_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        type: 'photo',
-        dataUrl,
-        timestamp: Date.now(),
-        sceneMode: 'AUTO',
-        flashMode: 'off',
-        dateStamp: new Date().toLocaleString(),
-        aspectMode: '16:9',
-      };
-      addCapture(panoramaCapture as unknown as import('@/lib/camera-store').CaptureItem);
-      saveCapture(panoramaCapture as unknown as Record<string, unknown>).catch(() => {});
-      clearPanoramaFrames();
-    });
-  }, [panoramaFrames, addCapture, clearPanoramaFrames]);
-
-  // Apply edits to canvas
-  const handleApplyEdit = useCallback(() => {
-    if (!current || current.type === 'video') return;
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.filter = `brightness(${1 + editBrightness / 100}) contrast(${1 + editContrast / 100}) saturate(${1 + editSaturation / 100})`;
-      ctx.drawImage(img, 0, 0);
-      const newDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      updateCaptureDataUrl(current.id, newDataUrl);
-      saveCapture({ ...current, dataUrl: newDataUrl, editBrightness: 0, editContrast: 0, editSaturation: 0 } as unknown as Record<string, unknown>).catch(() => {});
-      setEditMode(false);
-    };
-    img.src = current.dataUrl;
-  }, [current, editBrightness, editContrast, editSaturation, updateCaptureDataUrl]);
-
-  const handleResetEdit = useCallback(() => {
-    if (current && current.type === 'photo') {
-      updateCaptureEdit(current.id, 0, 0, 0);
-    }
-  }, [current, updateCaptureEdit]);
-
-  // Crop handle drag
-  const handleCropDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    cropDraggingRef.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!cropDraggingRef.current) return;
-    const onMove = (clientX: number, clientY: number) => {
-      const container = cropContainerRef.current;
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-      const px = ((clientX - rect.left) / rect.width) * 100;
-      const py = ((clientY - rect.top) / rect.height) * 100;
-      const newW = Math.max(10, Math.min(100 - cropRect.x, px - cropRect.x));
-      const newH = Math.max(10, Math.min(100 - cropRect.y, py - cropRect.y));
-      setCropRect(prev => ({ ...prev, w: newW, h: newH }));
-    };
-    const onMouseMove = (e: MouseEvent) => onMove(e.clientX, e.clientY);
-    const onTouchMove = (e: TouchEvent) => { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); };
-    const onEnd = () => { cropDraggingRef.current = false; };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onEnd);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onEnd);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onEnd);
-    };
-  }, [cropRect.x, cropRect.y]);
-
-  // Apply crop
-  const handleApplyCrop = useCallback(() => {
-    if (!current || current.type === 'video') return;
-    const img = new Image();
-    img.onload = () => {
-      const sx = Math.round(img.width * cropRect.x / 100);
-      const sy = Math.round(img.height * cropRect.y / 100);
-      const sw = Math.round(img.width * cropRect.w / 100);
-      const sh = Math.round(img.height * cropRect.h / 100);
-      const canvas = document.createElement('canvas');
-      canvas.width = sw; canvas.height = sh;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-      const newDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      updateCaptureDataUrl(current.id, newDataUrl);
-      updateCaptureCrop(current.id, { x: cropRect.x, y: cropRect.y, w: cropRect.w, h: cropRect.h });
-      saveCapture({ ...current, dataUrl: newDataUrl } as unknown as Record<string, unknown>).catch(() => {});
-      setCropMode(false);
-    };
-    img.src = current.dataUrl;
-  }, [current, cropRect, updateCaptureDataUrl, updateCaptureCrop]);
-
-  // Keyboard nav
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') goNext();
-      else if (e.key === 'ArrowLeft') goPrev();
-      else if (e.key === 'Escape') goBack();
-      else if (e.key === 'i') setShowInfo(s => !s);
-      else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (current) {
-          deleteCapture(current.id);
-          setShowInfo(false);
-        }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [goNext, goPrev, goBack, current, deleteCapture]);
-
-  // Touch swipe
+  // Touch swipe — a convenience gesture; the D-pad is the primary control.
   useEffect(() => {
     let startX = 0;
     const handleTouchStart = (e: TouchEvent) => { startX = e.touches[0].clientX; };
     const handleTouchEnd = (e: TouchEvent) => {
       const diff = startX - e.changedTouches[0].clientX;
       if (Math.abs(diff) > 50) {
+        if (playbackView !== 'single' || zoomLevel > 1.01) return;
         if (diff > 0) goNext();
         else goPrev();
       }
@@ -364,25 +164,28 @@ export function Gallery() {
       el?.removeEventListener('touchstart', handleTouchStart);
       el?.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [goNext, goPrev]);
+  }, [goNext, goPrev, playbackView, zoomLevel]);
 
-  // Compute the CSS filter for the edit preview
-  const editFilter = `brightness(${1 + editBrightness / 100}) contrast(${1 + editContrast / 100}) saturate(${1 + editSaturation / 100})`;
-  const hasEdit = editBrightness !== 0 || editContrast !== 0 || editSaturation !== 0;
+  const performDelete = useCallback(() => {
+    if (!current) return;
+    deleteCapture(current.id);
+    deleteCaptureFromDB(current.id).catch(() => {});
+    setPlaybackDelete(false);
+    setPlaybackVideoPlaying(false);
+    setPlaybackInfo(false);
+  }, [current, deleteCapture, setPlaybackDelete, setPlaybackVideoPlaying, setPlaybackInfo]);
+
+  const openCapture = useCallback((i: number) => {
+    setGalleryIndex(i);
+    setPlaybackView('single');
+  }, [setGalleryIndex, setPlaybackView]);
 
   if (captures.length === 0) {
     return (
-      <div className="digi-gallery-empty">
-        <div className="digi-no-image-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <path d="M21 15l-5-5L5 21" />
-          </svg>
-        </div>
-        <p className="digi-no-image-text">NO IMAGE</p>
-        <button className="digi-gallery-back-btn" onClick={goBack}>
-          ← BACK TO CAMERA
+      <div className="digi-gallery digi-gallery-empty">
+        <p className="digi-no-image-text">NO IMAGES</p>
+        <button className="digi-gallery-back-btn" onClick={() => setMode('photo')}>
+          EXIT
         </button>
       </div>
     );
@@ -390,388 +193,174 @@ export function Gallery() {
 
   if (!current) return null;
 
-  const formatDate = (ts: number) => {
-    const d = new Date(ts);
-    return d.toLocaleString('en-US', {
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
+  const counter = `${String(galleryIndex + 1).padStart(2, '0')}/${String(captures.length).padStart(2, '0')}`;
+  const zoomStyle = {
+    transformOrigin: `${playbackPan.x}% ${playbackPan.y}%`,
+    transform: `scale(${zoomLevel}) rotate(${current.rotation || 0}deg)`,
   };
 
   return (
     <div className="digi-gallery" id="gallery-swipe-area">
-      {/* Top bar */}
-      <div className="digi-gallery-top">
-        <button className="digi-gallery-nav-btn" onClick={goBack}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <span className="digi-gallery-counter">
-          {String(galleryIndex + 1).padStart(2, '0')}/{String(captures.length).padStart(2, '0')}
-        </span>
-        <button
-          className="digi-gallery-nav-btn"
-          onClick={() => setShowInfo(!showInfo)}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Image display */}
-      <div className="digi-gallery-display" id="gallery-display">
-        {current.type === 'video' ? (
-          isVideoPlaying ? (
-            <video
-              src={current.dataUrl}
-              autoPlay
-              controls
-              className="digi-gallery-video"
-              onEnded={() => setIsVideoPlaying(false)}
-            />
-          ) : (
-            <div className="digi-gallery-video-thumb" onClick={() => setIsVideoPlaying(true)}>
-              <video src={current.dataUrl} className="digi-gallery-video-preview" />
-              <div className="digi-play-overlay">
-                <div className="digi-play-triangle" />
-              </div>
+      {playbackView === 'index' ? (
+        <div className="digi-index-grid" role="grid" aria-label="Thumbnail index">
+          {captures.map((cap, i) => (
+            <button
+              key={cap.id}
+              role="gridcell"
+              className={`digi-index-cell ${i === playbackCursor ? 'cell-cur' : ''}`}
+              onClick={() => openCapture(i)}
+            >
+              {cap.type === 'video' ? (
+                <video src={cap.dataUrl} muted playsInline className="digi-index-media" />
+              ) : (
+                <img src={cap.dataUrl} alt={`Photo ${i + 1}`} className="digi-index-media" />
+              )}
+              {cap.type === 'video' && <span className="digi-index-play">▶</span>}
+              {cap.protected && <span className="digi-protect-badge" title="Protected">P</span>}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="digi-gallery-display" id="gallery-display">
+            <div className="digi-gallery-transition" key={shownId}>
+              {current.type === 'video' ? (
+                <video
+                  ref={videoRef}
+                  src={current.dataUrl}
+                  muted
+                  playsInline
+                  className="digi-gallery-video"
+                  style={zoomStyle}
+                  onClick={() => setPlaybackVideoPlaying(!playbackVideoPlaying)}
+                />
+              ) : (
+                <img
+                  src={current.dataUrl}
+                  alt={`Photo ${galleryIndex + 1}`}
+                  className="digi-gallery-image"
+                  style={zoomStyle}
+                />
+              )}
             </div>
-          )
-        ) : (
-          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img
-              src={current.dataUrl}
-              alt={`Photo ${galleryIndex + 1}`}
-              className="digi-gallery-image"
-              style={{ transform: current.rotation ? `rotate(${current.rotation}deg)` : undefined, filter: hasEdit ? editFilter : undefined }}
-            />
-            {/* Watermark live preview */}
-            {editMode && watermarkText && current.type === 'photo' && (
-              <div
-                className="digi-watermark-preview"
-                style={{
-                  fontSize: `${watermarkSize}px`,
-                  ...(watermarkPos === 'tl' ? { top: '8px', left: '8px' } :
-                    watermarkPos === 'tr' ? { top: '8px', right: '8px' } :
-                    watermarkPos === 'bl' ? { bottom: '8px', left: '8px' } :
-                    { bottom: '8px', right: '8px' }),
-                }}
-              >
-                {watermarkText}
+            {current.type === 'video' && !playbackVideoPlaying && (
+              <div className="digi-play-overlay" onClick={() => setPlaybackVideoPlaying(true)}>
+                <div className="digi-play-triangle" />
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Navigation arrows */}
-      <div className="digi-gallery-nav">
-        <button
-          className={`digi-gallery-arrow ${galleryIndex <= 0 ? 'disabled' : ''}`}
-          onClick={goPrev}
-          disabled={galleryIndex <= 0}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <button
-          className={`digi-gallery-arrow ${galleryIndex >= captures.length - 1 ? 'disabled' : ''}`}
-          onClick={goNext}
-          disabled={galleryIndex >= captures.length - 1}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-      </div>
-
-      {/* Info overlay */}
-      {showInfo && (
-        <div className="digi-gallery-info">
-          <div className="digi-info-row">
-            <span className="digi-info-label">FILE</span>
-            <span className="digi-info-value">DSC{String(galleryIndex + 1).padStart(4, '0')}.JPG</span>
-          </div>
-          <div className="digi-info-row">
-            <span className="digi-info-label">DATE</span>
-            <span className="digi-info-value">{formatDate(current.timestamp)}</span>
-          </div>
-          <div className="digi-info-row">
-            <span className="digi-info-label">SCENE</span>
-            <span className="digi-info-value">{current.sceneMode}</span>
-          </div>
-          <div className="digi-info-row">
-            <span className="digi-info-label">FLASH</span>
-            <span className="digi-info-value">{current.flashMode.toUpperCase()}</span>
-          </div>
-          <div className="digi-info-row">
-            <span className="digi-info-label">SIZE</span>
-            <span className="digi-info-value">14M 4320×3240</span>
-          </div>
-          {current.filter && current.filter !== 'off' && (
-            <div className="digi-info-row">
-              <span className="digi-info-label">FILTER</span>
-              <span className="digi-info-value">{current.filter.toUpperCase()}</span>
+          {/* Minimal readout bar — counter, battery, protect — like a camera LCD */}
+          <div className="digi-gallery-hud">
+            <div className="digi-gallery-hud-left">
+              <PlaybackBattery />
+              {current.protected && (
+                <span className="digi-protect-badge" title="Protected">P</span>
+              )}
             </div>
-          )}
-          {current.whiteBalance && (current.whiteBalance.temperature !== 0 || current.whiteBalance.tint !== 0) && (
-            <>
-              <div className="digi-info-row">
-                <span className="digi-info-label">WB TEMP</span>
-                <span className="digi-info-value">{current.whiteBalance.temperature > 0 ? '+' : ''}{current.whiteBalance.temperature.toFixed(1)}</span>
+            <span className="digi-gallery-counter">{counter}</span>
+          </div>
+
+          {/* DISP info readout */}
+          {playbackInfo && (
+            <div className="digi-gallery-info">
+              <div className="digi-info-head">
+                <span className="digi-info-led" />
+                <span className="digi-info-title">IMAGE INFO</span>
+                <button className="digi-info-close" onClick={() => setPlaybackInfo(false)} aria-label="Close info">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </div>
-              <div className="digi-info-row">
-                <span className="digi-info-label">WB TINT</span>
-                <span className="digi-info-value">{current.whiteBalance.tint > 0 ? '+' : ''}{current.whiteBalance.tint.toFixed(1)}</span>
-              </div>
-            </>
-          )}
-          {current.aspectMode && current.aspectMode !== '4:3' && (
-            <div className="digi-info-row">
-              <span className="digi-info-label">ASPECT</span>
-              <span className="digi-info-value">{current.aspectMode}</span>
-            </div>
-          )}
-          {current.latitude !== undefined && current.longitude !== undefined && (
-            <div className="digi-info-row">
-              <span className="digi-info-label">🧭 GPS</span>
-              <span className="digi-info-value">{formatCoord(current.latitude, 'N', 'S')} {formatCoord(current.longitude, 'E', 'W')}</span>
-            </div>
-          )}
-          <canvas id="gallery-histogram" width="200" height="60" style={{ width: '100%', height: '60px', borderRadius: '2px', marginTop: '6px', imageRendering: 'auto' }} />
-        </div>
-      )}
-
-      {/* Edit panel */}
-      {editMode && current.type === 'photo' && (
-        <div className="digi-edit-panel">
-          <div className="digi-edit-row">
-            <span className="digi-edit-label">BRIGHT</span>
-            <input
-              type="range"
-              className="digi-edit-slider"
-              min="-100"
-              max="100"
-              value={editBrightness}
-              onChange={(e) => { const v = parseInt(e.target.value); updateCaptureEdit(current.id, v, editContrast, editSaturation); }}
-            />
-            <span className="digi-edit-val">{editBrightness > 0 ? '+' : ''}{editBrightness}</span>
-          </div>
-          <div className="digi-edit-row">
-            <span className="digi-edit-label">CONTR</span>
-            <input
-              type="range"
-              className="digi-edit-slider"
-              min="-100"
-              max="100"
-              value={editContrast}
-              onChange={(e) => { const v = parseInt(e.target.value); updateCaptureEdit(current.id, editBrightness, v, editSaturation); }}
-            />
-            <span className="digi-edit-val">{editContrast > 0 ? '+' : ''}{editContrast}</span>
-          </div>
-          <div className="digi-edit-row">
-            <span className="digi-edit-label">SATUR</span>
-            <input
-              type="range"
-              className="digi-edit-slider"
-              min="-100"
-              max="100"
-              value={editSaturation}
-              onChange={(e) => { const v = parseInt(e.target.value); updateCaptureEdit(current.id, editBrightness, editContrast, v); }}
-            />
-            <span className="digi-edit-val">{editSaturation > 0 ? '+' : ''}{editSaturation}</span>
-          </div>
-          {/* Watermark section */}
-          <div className="digi-watermark-section">
-            <div className="digi-watermark-row">
-              <span className="digi-edit-label">TEXT</span>
-              <input
-                type="text"
-                className="digi-watermark-input"
-                placeholder="watermark..."
-                value={watermarkText}
-                onChange={(e) => setWatermarkText(e.target.value)}
-                maxLength={60}
-              />
-            </div>
-            <div className="digi-watermark-row">
-              <span className="digi-edit-label">POS</span>
-              <div className="digi-watermark-pos-btns">
-                {(['tl', 'tr', 'bl', 'br'] as const).map((pos) => (
-                  <button
-                    key={pos}
-                    className={`digi-watermark-pos-btn ${watermarkPos === pos ? 'pos-active' : ''}`}
-                    onClick={() => setWatermarkPos(pos)}
-                  >
-                    {pos.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="digi-watermark-row">
-              <span className="digi-edit-label">SIZE</span>
-              <input
-                type="range"
-                className="digi-edit-slider"
-                min="12"
-                max="48"
-                value={watermarkSize}
-                onChange={(e) => setWatermarkSize(parseInt(e.target.value))}
-              />
-              <span className="digi-edit-val">{watermarkSize}px</span>
-            </div>
-            <div className="digi-watermark-row">
-              <span className="digi-edit-label"> </span>
-              <button className="digi-watermark-burn-btn" onClick={handleBurnIn} disabled={!watermarkText.trim()} style={{ opacity: watermarkText.trim() ? 1 : 0.4 }}>BURN IN</button>
-            </div>
-          </div>
-          <div className="digi-edit-btns">
-            <button className="digi-edit-btn digi-edit-apply" onClick={handleApplyEdit}>APPLY</button>
-            <button className="digi-edit-btn digi-edit-reset" onClick={handleResetEdit}>RESET</button>
-            <button className="digi-edit-btn digi-edit-crop-btn" onClick={() => { setCropMode(!cropMode); setCropRect({ x: 25, y: 25, w: 50, h: 50 }); }}>{cropMode ? 'EXIT CROP' : 'CROP'}</button>
-          </div>
-        </div>
-      )}
-
-      {/* Crop overlay */}
-      {cropMode && current.type === 'photo' && (
-        <div className="digi-crop-overlay" ref={cropContainerRef} style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
-          {/* Darkened edges - top */}
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${cropRect.y}%`, background: 'rgba(0,0,0,0.6)', pointerEvents: 'none' }} />
-          {/* Darkened edges - bottom */}
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${100 - cropRect.y - cropRect.h}%`, background: 'rgba(0,0,0,0.6)', pointerEvents: 'none' }} />
-          {/* Darkened edges - left */}
-          <div style={{ position: 'absolute', top: `${cropRect.y}%`, left: 0, width: `${cropRect.x}%`, height: `${cropRect.h}%`, background: 'rgba(0,0,0,0.6)', pointerEvents: 'none' }} />
-          {/* Darkened edges - right */}
-          <div style={{ position: 'absolute', top: `${cropRect.y}%`, right: 0, width: `${100 - cropRect.x - cropRect.w}%`, height: `${cropRect.h}%`, background: 'rgba(0,0,0,0.6)', pointerEvents: 'none' }} />
-          {/* Crop rectangle */}
-          <div
-            className="digi-crop-rect"
-            style={{ position: 'absolute', top: `${cropRect.y}%`, left: `${cropRect.x}%`, width: `${cropRect.w}%`, height: `${cropRect.h}%` }}
-          >
-            {/* Rule of thirds grid */}
-            <div style={{ position: 'absolute', top: '33.33%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.15)' }} />
-            <div style={{ position: 'absolute', top: '66.66%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.15)' }} />
-            <div style={{ position: 'absolute', left: '33.33%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)' }} />
-            <div style={{ position: 'absolute', left: '66.66%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)' }} />
-            {/* Resize handle */}
-            <div
-              className="digi-crop-handle"
-              onMouseDown={handleCropDragStart}
-              onTouchStart={handleCropDragStart}
-            />
-            {/* Dimensions badge */}
-            <div className="digi-crop-dims">{Math.round(cropRect.w * 43.2)}×{Math.round(cropRect.h * 32.4)}</div>
-          </div>
-          {/* Crop action buttons */}
-          <div className="digi-crop-actions">
-            <button className="digi-edit-btn digi-edit-apply" onClick={handleApplyCrop}>APPLY CROP</button>
-            <button className="digi-edit-btn digi-edit-reset" onClick={() => setCropMode(false)}>CANCEL</button>
-          </div>
-        </div>
-      )}
-
-      {/* Thumbnail strip */}
-      <div className="digi-gallery-strip">
-        {captures.map((cap, idx) => (
-            <button
-              key={cap.id}
-              className={`digi-thumb ${idx === galleryIndex ? 'thumb-active' : ''}`}
-              onClick={() => { setGalleryIndex(idx); setIsVideoPlaying(false); }}
-            >
-              {cap.type === 'video' ? (
-                <div className="digi-thumb-video">
-                  <video src={cap.dataUrl} muted />
-                  <div className="digi-thumb-play-icon">▶</div>
+              <dl className="digi-info-rows">
+                <div className="digi-info-row">
+                  <dt className="digi-info-label">FILE</dt>
+                  <dd className="digi-info-value">DSC{String(galleryIndex + 1).padStart(4, '0')}.JPG</dd>
                 </div>
-              ) : (
-                <img src={cap.dataUrl} alt="" />
-              )}
-            </button>
-          ))}
-      </div>
+                <div className="digi-info-row">
+                  <dt className="digi-info-label">DATE</dt>
+                  <dd className="digi-info-value">{formatCompactDateTime(current.timestamp)}</dd>
+                </div>
+                <div className="digi-info-row">
+                  <dt className="digi-info-label">SCENE</dt>
+                  <dd className="digi-info-value">{current.sceneMode}</dd>
+                </div>
+                <div className="digi-info-row">
+                  <dt className="digi-info-label">FLASH</dt>
+                  <dd className="digi-info-value">{current.flashMode.toUpperCase()}</dd>
+                </div>
+                <div className="digi-info-row">
+                  <dt className="digi-info-label">SIZE</dt>
+                  <dd className="digi-info-value">14.0MP 4320×3240</dd>
+                </div>
+                {current.filter && current.filter !== 'off' && (
+                  <div className="digi-info-row">
+                    <dt className="digi-info-label">FILTER</dt>
+                    <dd className="digi-info-value">{current.filter.toUpperCase()}</dd>
+                  </div>
+                )}
+                {current.whiteBalance && (current.whiteBalance.temperature !== 0 || current.whiteBalance.tint !== 0) && (
+                  <>
+                    <div className="digi-info-row">
+                      <dt className="digi-info-label">WB TEMP</dt>
+                      <dd className="digi-info-value">{current.whiteBalance.temperature > 0 ? '+' : ''}{current.whiteBalance.temperature.toFixed(1)}</dd>
+                    </div>
+                    <div className="digi-info-row">
+                      <dt className="digi-info-label">WB TINT</dt>
+                      <dd className="digi-info-value">{current.whiteBalance.tint > 0 ? '+' : ''}{current.whiteBalance.tint.toFixed(1)}</dd>
+                    </div>
+                  </>
+                )}
+                {current.aspectMode && current.aspectMode !== '4:3' && (
+                  <div className="digi-info-row">
+                    <dt className="digi-info-label">ASPECT</dt>
+                    <dd className="digi-info-value">{current.aspectMode}</dd>
+                  </div>
+                )}
+                {current.latitude !== undefined && current.longitude !== undefined && (
+                  <div className="digi-info-row">
+                    <dt className="digi-info-label">GPS</dt>
+                    <dd className="digi-info-value">{formatDMS(current.latitude, 'N', 'S')} {formatDMS(current.longitude, 'E', 'W')}</dd>
+                  </div>
+                )}
+                {current.protected && (
+                  <div className="digi-info-row">
+                    <dt className="digi-info-label">PROTECT</dt>
+                    <dd className="digi-info-value">ON</dd>
+                  </div>
+                )}
+              </dl>
+              <div className="digi-info-hist-wrap">
+                <span className="digi-info-hist-label">TONAL RANGE</span>
+                <canvas id="gallery-histogram" width="200" height="48" className="digi-info-hist" />
+              </div>
+            </div>
+          )}
 
-      {/* Action dock */}
-      <div className="gal-dock">
-        <button
-          className={`gal-dock-btn ${likedIds.has(current.id) ? 'gal-liked' : ''}`}
-          onClick={() => setLikedIds((prev) => { const n = new Set(prev); if (n.has(current.id)) n.delete(current.id); else n.add(current.id); return n; })}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill={likedIds.has(current.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-        </button>
-        <button className="gal-dock-btn" onClick={() => {
-          const a = document.createElement('a');
-          a.href = current.dataUrl;
-          a.download = `DSC${String(galleryIndex + 1).padStart(4, '0')}.${current.type === 'video' ? 'webm' : 'jpg'}`;
-          a.click();
-        }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-        </button>
-        <button className="gal-dock-btn" onClick={() => { deleteCapture(current.id); setShowInfo(false); }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-        </button>
-        <button className="gal-dock-btn gal-dock-more" onClick={() => setShowMore(!showMore)}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-          </svg>
-        </button>
-      </div>
-
-      {/* More actions sheet */}
-      {showMore && (
-        <>
-          <div className="gal-more-backdrop" onClick={() => setShowMore(false)} />
-          <div className="gal-more-sheet">
-            <div className="gal-more-handle" />
-            <div className="gal-more-grid">
-              {current.type === 'photo' && (
-                <button className="gal-more-item" onClick={() => { handleRotate(); setShowMore(false); }}>
-                  <div className="gal-more-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                  </div>
-                  <span>Rotate</span>
+          {/* Delete confirmation overlay */}
+          {playbackDelete && (
+            <div className="digi-delete-confirm">
+              <div className="digi-delete-title">DELETE THIS IMAGE?</div>
+              <div className="digi-delete-options">
+                <button
+                  className={`digi-delete-opt ${playbackDeleteChoice === 'yes' ? 'opt-sel' : ''}`}
+                  onClick={() => setPlaybackDeleteChoice('yes')}
+                >
+                  YES
                 </button>
-              )}
-              {'share' in navigator && (
-                <button className="gal-more-item" onClick={async () => { setShowMore(false); try { if (current.type === 'photo') { const res = await fetch(current.dataUrl); const blob = await res.blob(); const file = new File([blob], `DSC${String(galleryIndex + 1).padStart(4, '0')}.jpg`, { type: 'image/jpeg' }); await navigator.share({ files: [file], title: 'DigiCam Photo' }); } else { await navigator.share({ title: 'DigiCam Video' }); } } catch { /* cancelled */ } }}>
-                  <div className="gal-more-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                  </div>
-                  <span>Share</span>
+                <button
+                  className={`digi-delete-opt ${playbackDeleteChoice === 'no' ? 'opt-sel' : ''}`}
+                  onClick={() => setPlaybackDeleteChoice('no')}
+                >
+                  NO
                 </button>
-              )}
-              {panoramaFrames.length >= 2 && (
-                <button className="gal-more-item" onClick={() => { handleStitch(); setShowMore(false); }}>
-                  <div className="gal-more-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12C2 6.5 6.5 2 12 2s10 4.5 10 10-4.5 10-10 10S2 17.5 2 12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>
-                  </div>
-                  <span>Stitch</span>
-                </button>
-              )}
-              {current.type === 'photo' && (
-                <button className="gal-more-item" onClick={() => { setShowInfo(!showInfo); setShowMore(false); }}>
-                  <div className="gal-more-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                  </div>
-                  <span>Info</span>
-                </button>
+              </div>
+              {playbackDeleteChoice === 'yes' && (
+                <button className="digi-delete-go" onClick={performDelete}>CONFIRM</button>
               )}
             </div>
-          </div>
+          )}
         </>
       )}
-
-      {/* Double-tap to like */}
-      <div className="digi-like-heart" style={{ opacity: likedIds.has(current.id) ? 1 : 0, pointerEvents: 'none' }}>
-        ♥
-      </div>
     </div>
   );
 }
